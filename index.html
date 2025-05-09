@@ -124,9 +124,8 @@
     const map = L.map("map").setView([1.1145, 37.4690], 10);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
-    function loadCSV(url, callback) {
-      Papa.parse(url, {
-        download: true,
+    function loadCSV(file, callback) {
+      Papa.parse(file, {
         header: true,
         complete: function(results) {
           callback(results.data);
@@ -155,93 +154,27 @@
       });
     }
 
-    function initDashboard(sites, species, templates) {
-      sites.forEach(site => {
-        site.Latitude = parseFloat(site.Latitude);
-        site.Longitude = parseFloat(site.Longitude);
-        site.Recordings_Count = parseInt(site.Recordings_Count);
-      });
-
-      sites.forEach(site => {
-        if (!isNaN(site.Latitude) && !isNaN(site.Longitude)) {
-          L.marker([site.Latitude, site.Longitude]).addTo(map)
-            .bindPopup(`<b>${site.Name}</b><br>Recordings: ${site.Recordings_Count}`);
-        }
-      });
-
-      const totalRecordings = sites.reduce((sum, site) => sum + (site.Recordings_Count || 0), 0);
-      const dates = sites.map(site => new Date(site.Updated)).filter(d => !isNaN(d));
-      const lastUpdated = dates.length > 0 ? new Date(Math.max(...dates)).toLocaleDateString() : "N/A";
-
-      document.getElementById('siteSummary').innerHTML =
-        `<strong>Total Recordings:</strong> ${totalRecordings.toLocaleString()}<br>` +
-        `<strong>Last Update:</strong> ${lastUpdated}`;
-
-      new Chart(document.getElementById('allSitesChart'), {
-        type: 'bar',
-        data: {
-          labels: sites.map(s => s.Name),
-          datasets: [{ label: 'Recordings Count', data: sites.map(s => s.Recordings_Count), backgroundColor: '#3498db' }]
-        },
-        options: { responsive: true, plugins: { legend: { display: false } } }
-      });
-
-      const taxonCounts = {}, songTypeCounts = {}, nodes = [], edges = [], nodeMap = {};
-      species.forEach(sp => {
-        if (sp.taxon) taxonCounts[sp.taxon] = (taxonCounts[sp.taxon] || 0) + 1;
-        if (sp.songtype) songTypeCounts[sp.songtype] = (songTypeCounts[sp.songtype] || 0) + 1;
-        if (sp.taxon && sp.scientificname) {
-          const t = `T:${sp.taxon}`, s = `S:${sp.scientificname}`;
-          if (!nodeMap[t]) { nodes.push({ id: t, label: sp.taxon, group: 'taxon' }); nodeMap[t] = true; }
-          if (!nodeMap[s]) { nodes.push({ id: s, label: sp.scientificname, group: 'species' }); nodeMap[s] = true; }
-          edges.push({ from: t, to: s });
-        }
-      });
-      new Chart(document.getElementById('taxonPieChart'), {
-        type: 'pie',
-        data: { labels: Object.keys(taxonCounts), datasets: [{ data: Object.values(taxonCounts), backgroundColor: ['#1abc9c','#e67e22','#9b59b6','#f39c12','#2ecc71'] }] }
-      });
-      new Chart(document.getElementById('songTypeBarChart'), {
-        type: 'bar',
-        data: { labels: Object.keys(songTypeCounts), datasets: [{ label: 'Count', data: Object.values(songTypeCounts), backgroundColor: '#2ecc71' }] },
-        options: { responsive: true, plugins: { legend: { display: false } } }
-      });
-      new vis.Network(document.getElementById('networkGraph'), { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) }, { nodes: { shape: 'dot', size: 10 }, physics: { stabilization: false } });
-
-      // Template data analysis
-      const modelCounts = {}, confidenceBins = {}, dateCounts = {}, speciesDetections = {};
-      templates.forEach(row => {
-        modelCounts[row.Model_Name] = (modelCounts[row.Model_Name] || 0) + 1;
-        const conf = parseFloat(row.Confidence);
-        const bin = Math.floor(conf / 10) * 10;
-        confidenceBins[bin] = (confidenceBins[bin] || 0) + 1;
-        const date = new Date(row.Start_Time).toISOString().split('T')[0];
-        dateCounts[date] = (dateCounts[date] || 0) + 1;
-        speciesDetections[row.Species] = (speciesDetections[row.Species] || 0) + 1;
-      });
-      new Chart(document.getElementById('modelChart'), {
-        type: 'bar',
-        data: { labels: Object.keys(modelCounts).slice(0,5), datasets: [{ data: Object.values(modelCounts).slice(0,5), backgroundColor: '#8e44ad' }] }
-      });
-      new Chart(document.getElementById('confidenceChart'), {
-        type: 'bar',
-        data: { labels: Object.keys(confidenceBins), datasets: [{ data: Object.values(confidenceBins), backgroundColor: '#16a085' }] }
-      });
-      new Chart(document.getElementById('trendChart'), {
-        type: 'line',
-        data: { labels: Object.keys(dateCounts), datasets: [{ label: 'Detections', data: Object.values(dateCounts), borderColor: '#e74c3c' }] }
-      });
-      new Chart(document.getElementById('speciesCountChart'), {
-        type: 'bar',
-        data: { labels: Object.keys(speciesDetections).slice(0,10), datasets: [{ data: Object.values(speciesDetections).slice(0,10), backgroundColor: '#2980b9' }] }
-      });
+    window.onload = function () {
+      fetch('sites-export.csv')
+        .then(res => res.text())
+        .then(sitesCSV => {
+          fetch('species-export.csv')
+            .then(res => res.text())
+            .then(speciesCSV => {
+              fetch('_templates.csv')
+                .then(res => res.text())
+                .then(templatesCSV => {
+                  loadCSV(sitesCSV, sites => {
+                    loadCSV(speciesCSV, species => {
+                      loadCSV(templatesCSV, templates => {
+                        initDashboard(sites, species, templates);
+                      });
+                    });
+                  });
+                });
+            });
+        });
     }
-
-    Promise.all([
-      new Promise(r => loadCSV('sites-export.csv', r)),
-      new Promise(r => loadCSV('species-export.csv', r)),
-      new Promise(r => loadCSV('_templates.csv', r))
-    ]).then(([sites, species, templates]) => initDashboard(sites, species, templates));
   </script>
 </body>
 </html>

@@ -1,96 +1,247 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bioacoustics Dashboard</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bioacoustic Monitoring Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/vis-network/standalone/umd/vis-network.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/vis-network.min.css" />
   <style>
-    body { font-family: Arial, sans-serif; margin: 2em; background-color: #f9f9f9; }
-    h2 { border-bottom: 2px solid #ccc; padding-bottom: 0.25em; }
-    .section { margin-bottom: 3em; background-color: #fff; padding: 1em; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-    .card { margin-top: 1em; }
-    canvas { background-color: #fff; border: 1px solid #ddd; padding: 1em; margin-bottom: 1em; }
-    .filter, .download-btns { margin-bottom: 1em; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f4f4f4;
+    }
+    header {
+      background: #2c3e50;
+      color: #fff;
+      padding: 1rem;
+      text-align: center;
+    }
+    .section {
+      padding: 20px;
+    }
+    .section h2 {
+      border-bottom: 2px solid #ccc;
+      padding-bottom: 5px;
+    }
+    .filter {
+      margin-bottom: 10px;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    #map {
+      height: 400px;
+      width: 100%;
+    }
+    canvas, #networkGraph {
+      max-width: 100%;
+    }
+    .export-btns {
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
-  <h1>Bioacoustics Data Dashboard</h1>
+  <header>
+    <h1>Bioacoustic Monitoring Dashboard</h1>
+  </header>
 
-  <div class="section" id="sites-section">
+  <div class="section" id="sitesSection">
     <h2>Sites Data</h2>
-    <input type="text" id="siteFilter" class="filter" placeholder="Filter Sites..." onkeyup="filterData('siteTable', this.value)">
-    <div class="download-btns">
-      <button onclick="downloadChartAs('sitesChart', 'sites-data', 'png')">Download PNG</button>
-      <button onclick="downloadChartAs('sitesChart', 'sites-data', 'pdf')">Download PDF</button>
+    <input type="text" class="filter" id="siteFilter" placeholder="Search sites..." oninput="filterCards('siteCard', this.value)" />
+    <div class="card siteCard">
+      <h3>Map of Recording Sites</h3>
+      <div id="map"></div>
     </div>
-    <canvas id="sitesChart"></canvas>
-    <table id="siteTable"></table>
+    <div class="card siteCard">
+      <h3>Recordings per Site</h3>
+      <div class="summary" id="siteSummary"></div>
+      <canvas id="allSitesChart"></canvas>
+      <div class="export-btns">
+        <button onclick="exportChart('allSitesChart')">Download Chart</button>
+      </div>
+    </div>
   </div>
 
-  <div class="section" id="species-section">
+  <div class="section" id="speciesSection">
     <h2>Species Data</h2>
-    <input type="text" id="speciesFilter" class="filter" placeholder="Filter Species..." onkeyup="filterData('speciesTable', this.value)">
-    <div class="download-btns">
-      <button onclick="downloadChartAs('speciesChart', 'species-data', 'png')">Download PNG</button>
-      <button onclick="downloadChartAs('speciesChart', 'species-data', 'pdf')">Download PDF</button>
+    <input type="text" class="filter" id="speciesFilter" placeholder="Search species..." oninput="filterCards('speciesCard', this.value)" />
+    <div class="card speciesCard">
+      <h3>Species Distribution by Taxon</h3>
+      <canvas id="taxonPieChart"></canvas>
+      <div class="export-btns">
+        <button onclick="exportChart('taxonPieChart')">Download Chart</button>
+      </div>
     </div>
-    <canvas id="speciesChart"></canvas>
-    <div id="networkGraph" style="height: 400px;"></div>
-    <table id="speciesTable"></table>
+    <div class="card speciesCard">
+      <h3>Species Song Types</h3>
+      <canvas id="songTypeBarChart"></canvas>
+      <div class="export-btns">
+        <button onclick="exportChart('songTypeBarChart')">Download Chart</button>
+      </div>
+    </div>
+    <div class="card speciesCard">
+      <h3>Taxon vs Scientific Name Network</h3>
+      <div id="networkGraph" style="height: 400px;"></div>
+    </div>
   </div>
 
-  <div class="section" id="templates-section">
-    <h2>Templates Insights</h2>
-    <div class="download-btns">
-      <button onclick="downloadChartAs('topSpeciesChart', 'top-species', 'png')">Download Top Species (PNG)</button>
-      <button onclick="downloadChartAs('topSpeciesChart', 'top-species', 'pdf')">Download Top Species (PDF)</button>
+  <div class="section" id="templatesSection">
+    <h2>Template Insights</h2>
+    <input type="text" class="filter" id="templateFilter" placeholder="Search insights..." oninput="filterCards('templateCard', this.value)" />
+    <div class="card templateCard">
+      <h3>Top Model Names</h3>
+      <canvas id="modelChart"></canvas>
     </div>
-    <canvas id="topSpeciesChart"></canvas>
-    <canvas id="avgDurationChart"></canvas>
-    <canvas id="freqRangeChart"></canvas>
-    <canvas id="templatesPerSiteChart"></canvas>
+    <div class="card templateCard">
+      <h3>Confidence Distribution</h3>
+      <canvas id="confidenceChart"></canvas>
+    </div>
+    <div class="card templateCard">
+      <h3>Detections Over Time</h3>
+      <canvas id="trendChart"></canvas>
+    </div>
+    <div class="card templateCard">
+      <h3>Detections per Species</h3>
+      <canvas id="speciesCountChart"></canvas>
+    </div>
   </div>
 
   <script>
-    function filterData(tableId, filter) {
-      const table = document.getElementById(tableId);
-      const rows = table.getElementsByTagName("tr");
-      for (let i = 1; i < rows.length; i++) {
-        const cells = rows[i].getElementsByTagName("td");
-        let matched = false;
-        for (let j = 0; j < cells.length; j++) {
-          if (cells[j].textContent.toLowerCase().includes(filter.toLowerCase())) {
-            matched = true; break;
-          }
-        }
-        rows[i].style.display = matched ? "" : "none";
-      }
-    }
+    const map = L.map("map").setView([1.1145, 37.4690], 10);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
-    function downloadChartAs(canvasId, filename, type) {
-      const canvas = document.getElementById(canvasId);
-      html2canvas(canvas).then(canvas => {
-        if (type === 'png') {
-          canvas.toBlob(blob => saveAs(blob, filename + '.png'));
-        } else if (type === 'pdf') {
-          const { jsPDF } = window.jspdf;
-          const pdf = new jsPDF();
-          const imgData = canvas.toDataURL("image/png");
-          pdf.addImage(imgData, 'PNG', 10, 10, 180, 160);
-          pdf.save(filename + '.pdf');
+    function loadCSV(url, callback) {
+      Papa.parse(url, {
+        download: true,
+        header: true,
+        complete: function(results) {
+          callback(results.data);
         }
       });
     }
 
-    // Your charts will be populated using embedded or separate JS based on the CSV files you’ve uploaded
-    // Placeholder for loading and rendering CSV data using fetch or embedded datasets
+    function exportChart(canvasId) {
+      html2canvas(document.getElementById(canvasId)).then(canvas => {
+        const imgData = canvas.toDataURL("image/png");
+        const pdf = new jspdf.jsPDF();
+        pdf.addImage(imgData, 'PNG', 10, 10, 180, 90);
+        pdf.save(canvasId + '.pdf');
+
+        const link = document.createElement('a');
+        link.download = canvasId + '.png';
+        link.href = imgData;
+        link.click();
+      });
+    }
+
+    function filterCards(className, value) {
+      const cards = document.querySelectorAll(`.${className}`);
+      cards.forEach(card => {
+        card.style.display = card.innerText.toLowerCase().includes(value.toLowerCase()) ? '' : 'none';
+      });
+    }
+
+    function initDashboard(sites, species, templates) {
+      sites.forEach(site => {
+        site.Latitude = parseFloat(site.Latitude);
+        site.Longitude = parseFloat(site.Longitude);
+        site.Recordings_Count = parseInt(site.Recordings_Count);
+      });
+
+      sites.forEach(site => {
+        if (!isNaN(site.Latitude) && !isNaN(site.Longitude)) {
+          L.marker([site.Latitude, site.Longitude]).addTo(map)
+            .bindPopup(`<b>${site.Name}</b><br>Recordings: ${site.Recordings_Count}`);
+        }
+      });
+
+      const totalRecordings = sites.reduce((sum, site) => sum + (site.Recordings_Count || 0), 0);
+      const dates = sites.map(site => new Date(site.Updated)).filter(d => !isNaN(d));
+      const lastUpdated = dates.length > 0 ? new Date(Math.max(...dates)).toLocaleDateString() : "N/A";
+
+      document.getElementById('siteSummary').innerHTML =
+        `<strong>Total Recordings:</strong> ${totalRecordings.toLocaleString()}<br>` +
+        `<strong>Last Update:</strong> ${lastUpdated}`;
+
+      new Chart(document.getElementById('allSitesChart'), {
+        type: 'bar',
+        data: {
+          labels: sites.map(s => s.Name),
+          datasets: [{ label: 'Recordings Count', data: sites.map(s => s.Recordings_Count), backgroundColor: '#3498db' }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+      });
+
+      const taxonCounts = {}, songTypeCounts = {}, nodes = [], edges = [], nodeMap = {};
+      species.forEach(sp => {
+        if (sp.taxon) taxonCounts[sp.taxon] = (taxonCounts[sp.taxon] || 0) + 1;
+        if (sp.songtype) songTypeCounts[sp.songtype] = (songTypeCounts[sp.songtype] || 0) + 1;
+        if (sp.taxon && sp.scientificname) {
+          const t = `T:${sp.taxon}`, s = `S:${sp.scientificname}`;
+          if (!nodeMap[t]) { nodes.push({ id: t, label: sp.taxon, group: 'taxon' }); nodeMap[t] = true; }
+          if (!nodeMap[s]) { nodes.push({ id: s, label: sp.scientificname, group: 'species' }); nodeMap[s] = true; }
+          edges.push({ from: t, to: s });
+        }
+      });
+      new Chart(document.getElementById('taxonPieChart'), {
+        type: 'pie',
+        data: { labels: Object.keys(taxonCounts), datasets: [{ data: Object.values(taxonCounts), backgroundColor: ['#1abc9c','#e67e22','#9b59b6','#f39c12','#2ecc71'] }] }
+      });
+      new Chart(document.getElementById('songTypeBarChart'), {
+        type: 'bar',
+        data: { labels: Object.keys(songTypeCounts), datasets: [{ label: 'Count', data: Object.values(songTypeCounts), backgroundColor: '#2ecc71' }] },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+      });
+      new vis.Network(document.getElementById('networkGraph'), { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) }, { nodes: { shape: 'dot', size: 10 }, physics: { stabilization: false } });
+
+      // Template data analysis
+      const modelCounts = {}, confidenceBins = {}, dateCounts = {}, speciesDetections = {};
+      templates.forEach(row => {
+        modelCounts[row.Model_Name] = (modelCounts[row.Model_Name] || 0) + 1;
+        const conf = parseFloat(row.Confidence);
+        const bin = Math.floor(conf / 10) * 10;
+        confidenceBins[bin] = (confidenceBins[bin] || 0) + 1;
+        const date = new Date(row.Start_Time).toISOString().split('T')[0];
+        dateCounts[date] = (dateCounts[date] || 0) + 1;
+        speciesDetections[row.Species] = (speciesDetections[row.Species] || 0) + 1;
+      });
+      new Chart(document.getElementById('modelChart'), {
+        type: 'bar',
+        data: { labels: Object.keys(modelCounts).slice(0,5), datasets: [{ data: Object.values(modelCounts).slice(0,5), backgroundColor: '#8e44ad' }] }
+      });
+      new Chart(document.getElementById('confidenceChart'), {
+        type: 'bar',
+        data: { labels: Object.keys(confidenceBins), datasets: [{ data: Object.values(confidenceBins), backgroundColor: '#16a085' }] }
+      });
+      new Chart(document.getElementById('trendChart'), {
+        type: 'line',
+        data: { labels: Object.keys(dateCounts), datasets: [{ label: 'Detections', data: Object.values(dateCounts), borderColor: '#e74c3c' }] }
+      });
+      new Chart(document.getElementById('speciesCountChart'), {
+        type: 'bar',
+        data: { labels: Object.keys(speciesDetections).slice(0,10), datasets: [{ data: Object.values(speciesDetections).slice(0,10), backgroundColor: '#2980b9' }] }
+      });
+    }
+
+    Promise.all([
+      new Promise(r => loadCSV('sites-export.csv', r)),
+      new Promise(r => loadCSV('species-export.csv', r)),
+      new Promise(r => loadCSV('_templates.csv', r))
+    ]).then(([sites, species, templates]) => initDashboard(sites, species, templates));
   </script>
 </body>
 </html>

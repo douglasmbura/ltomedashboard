@@ -1,778 +1,96 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bioacoustic Monitoring Dashboard</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bioacoustics Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.2/dist/vis-network.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet"/>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f4f4f4;
-    }
-    header {
-      background: #2c3e50;
-      color: #fff;
-      padding: 1rem;
-      text-align: center;
-    }
-    .section {
-      background: #ecf0f1;
-      padding: 15px;
-      margin: 10px 0;
-      border-radius: 5px;
-    }
-    .section-title {
-      color: #2c3e50;
-      border-bottom: 2px solid #3498db;
-      padding-bottom: 5px;
-      margin-bottom: 15px;
-    }
-    .container {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      padding: 20px;
-    }
-    .card {
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      position: relative;
-    }
-    #map {
-      height: 400px;
-      width: 100%;
-    }
-    #network {
-      height: 400px;
-      width: 100%;
-      border: 1px solid #ddd;
-    }
-    canvas {
-      max-width: 100%;
-    }
-    .summary {
-      font-size: 1rem;
-      margin-bottom: 1rem;
-    }
-    .filter-controls {
-      margin-bottom: 15px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    .filter-controls input, .filter-controls select {
-      padding: 8px;
-      border-radius: 4px;
-      border: 1px solid #ddd;
-    }
-    .download-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: #3498db;
-      color: white;
-      border: none;
-      padding: 5px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      z-index: 100;
-    }
-    .download-btn:hover {
-      background: #2980b9;
-    }
-    .download-options {
-      display: none;
-      position: absolute;
-      top: 35px;
-      right: 0;
-      background: white;
-      box-shadow: 0 0 5px rgba(0,0,0,0.2);
-      padding: 5px;
-      border-radius: 4px;
-      z-index: 101;
-    }
-    .download-options a {
-      display: block;
-      padding: 5px 10px;
-      color: #333;
-      text-decoration: none;
-    }
-    .download-options a:hover {
-      background: #f0f0f0;
-    }
-    .show-options {
-      display: block;
-    }
+    body { font-family: Arial, sans-serif; margin: 2em; background-color: #f9f9f9; }
+    h2 { border-bottom: 2px solid #ccc; padding-bottom: 0.25em; }
+    .section { margin-bottom: 3em; background-color: #fff; padding: 1em; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .card { margin-top: 1em; }
+    canvas { background-color: #fff; border: 1px solid #ddd; padding: 1em; margin-bottom: 1em; }
+    .filter, .download-btns { margin-bottom: 1em; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Bioacoustic Monitoring Dashboard</h1>
-  </header>
+  <h1>Bioacoustics Data Dashboard</h1>
 
-  <div class="container">
-    <div class="section">
-      <h2 class="section-title">Sites Data</h2>
-      <div class="filter-controls">
-        <input type="text" id="siteSearch" placeholder="Search sites...">
-        <select id="siteSort">
-          <option value="name-asc">Name (A-Z)</option>
-          <option value="name-desc">Name (Z-A)</option>
-          <option value="count-asc">Recordings Count (Low-High)</option>
-          <option value="count-desc">Recordings Count (High-Low)</option>
-        </select>
-      </div>
-      <div class="card">
-        <button class="download-btn" onclick="toggleDownloadOptions('siteMap')">Download ▼</button>
-        <div class="download-options" id="siteMapOptions">
-          <a href="#" onclick="downloadChart('map', 'site-map.png')">PNG</a>
-          <a href="#" onclick="downloadChart('map', 'site-map.pdf')">PDF</a>
-        </div>
-        <h3>Map of Recording Sites</h3>
-        <div id="map"></div>
-      </div>
-      <div class="card">
-        <button class="download-btn" onclick="toggleDownloadOptions('siteChart')">Download ▼</button>
-        <div class="download-options" id="siteChartOptions">
-          <a href="#" onclick="downloadChart('allSitesChart', 'sites-chart.png')">PNG</a>
-          <a href="#" onclick="downloadChart('allSitesChart', 'sites-chart.pdf')">PDF</a>
-        </div>
-        <h3>Recordings per Site</h3>
-        <div class="summary" id="siteSummary"></div>
-        <canvas id="allSitesChart"></canvas>
-      </div>
+  <div class="section" id="sites-section">
+    <h2>Sites Data</h2>
+    <input type="text" id="siteFilter" class="filter" placeholder="Filter Sites..." onkeyup="filterData('siteTable', this.value)">
+    <div class="download-btns">
+      <button onclick="downloadChartAs('sitesChart', 'sites-data', 'png')">Download PNG</button>
+      <button onclick="downloadChartAs('sitesChart', 'sites-data', 'pdf')">Download PDF</button>
     </div>
+    <canvas id="sitesChart"></canvas>
+    <table id="siteTable"></table>
+  </div>
 
-    <div class="section">
-      <h2 class="section-title">Species Data</h2>
-      <div class="filter-controls">
-        <input type="text" id="speciesSearch" placeholder="Search species...">
-        <select id="speciesFilter">
-          <option value="all">All Taxons</option>
-        </select>
-      </div>
-      <div class="card">
-        <button class="download-btn" onclick="toggleDownloadOptions('taxonChart')">Download ▼</button>
-        <div class="download-options" id="taxonChartOptions">
-          <a href="#" onclick="downloadChart('taxonPieChart', 'taxon-chart.png')">PNG</a>
-          <a href="#" onclick="downloadChart('taxonPieChart', 'taxon-chart.pdf')">PDF</a>
-        </div>
-        <h3>Species Distribution by Taxon</h3>
-        <canvas id="taxonPieChart"></canvas>
-      </div>
-      <div class="card">
-        <button class="download-btn" onclick="toggleDownloadOptions('songTypeChart')">Download ▼</button>
-        <div class="download-options" id="songTypeChartOptions">
-          <a href="#" onclick="downloadChart('songTypeBarChart', 'songtype-chart.png')">PNG</a>
-          <a href="#" onclick="downloadChart('songTypeBarChart', 'songtype-chart.pdf')">PDF</a>
-        </div>
-        <h3>Species Song Types</h3>
-        <canvas id="songTypeBarChart"></canvas>
-      </div>
-      <div class="card">
-        <button class="download-btn" onclick="toggleDownloadOptions('networkChart')">Download ▼</button>
-        <div class="download-options" id="networkChartOptions">
-          <a href="#" onclick="downloadChart('network', 'species-network.png')">PNG</a>
-          <a href="#" onclick="downloadChart('network', 'species-network.pdf')">PDF</a>
-        </div>
-        <h3>Species-Taxon Network</h3>
-        <div id="network"></div>
-      </div>
+  <div class="section" id="species-section">
+    <h2>Species Data</h2>
+    <input type="text" id="speciesFilter" class="filter" placeholder="Filter Species..." onkeyup="filterData('speciesTable', this.value)">
+    <div class="download-btns">
+      <button onclick="downloadChartAs('speciesChart', 'species-data', 'png')">Download PNG</button>
+      <button onclick="downloadChartAs('speciesChart', 'species-data', 'pdf')">Download PDF</button>
     </div>
+    <canvas id="speciesChart"></canvas>
+    <div id="networkGraph" style="height: 400px;"></div>
+    <table id="speciesTable"></table>
+  </div>
 
-    <div class="section">
-      <h2 class="section-title">Templates Data Analysis</h2>
-      <div class="filter-controls">
-        <input type="text" id="templateSearch" placeholder="Search templates...">
-        <select id="templateFilter">
-          <option value="all">All Species</option>
-        </select>
-      </div>
-      <div class="card">
-        <button class="download-btn" onclick="toggleDownloadOptions('durationChart')">Download ▼</button>
-        <div class="download-options" id="durationChartOptions">
-          <a href="#" onclick="downloadChart('durationChart', 'duration-chart.png')">PNG</a>
-          <a href="#" onclick="downloadChart('durationChart', 'duration-chart.pdf')">PDF</a>
-        </div>
-        <h3>Average Call Duration by Species</h3>
-        <canvas id="durationChart"></canvas>
-      </div>
-      <div class="card">
-        <button class="download-btn" onclick="toggleDownloadOptions('frequencyChart')">Download ▼</button>
-        <div class="download-options" id="frequencyChartOptions">
-          <a href="#" onclick="downloadChart('frequencyChart', 'frequency-chart.png')">PNG</a>
-          <a href="#" onclick="downloadChart('frequencyChart', 'frequency-chart.pdf')">PDF</a>
-        </div>
-        <h3>Frequency Range by Species</h3>
-        <canvas id="frequencyChart"></canvas>
-      </div>
-      <div class="card">
-        <button class="download-btn" onclick="toggleDownloadOptions('timeChart')">Download ▼</button>
-        <div class="download-options" id="timeChartOptions">
-          <a href="#" onclick="downloadChart('timeChart', 'time-chart.png')">PNG</a>
-          <a href="#" onclick="downloadChart('timeChart', 'time-chart.pdf')">PDF</a>
-        </div>
-        <h3>Recording Time Distribution</h3>
-        <canvas id="timeChart"></canvas>
-      </div>
-      <div class="card">
-        <button class="download-btn" onclick="toggleDownloadOptions('creatorChart')">Download ▼</button>
-        <div class="download-options" id="creatorChartOptions">
-          <a href="#" onclick="downloadChart('creatorChart', 'creator-chart.png')">PNG</a>
-          <a href="#" onclick="downloadChart('creatorChart', 'creator-chart.pdf')">PDF</a>
-        </div>
-        <h3>Recordings by Creator</h3>
-        <canvas id="creatorChart"></canvas>
-      </div>
+  <div class="section" id="templates-section">
+    <h2>Templates Insights</h2>
+    <div class="download-btns">
+      <button onclick="downloadChartAs('topSpeciesChart', 'top-species', 'png')">Download Top Species (PNG)</button>
+      <button onclick="downloadChartAs('topSpeciesChart', 'top-species', 'pdf')">Download Top Species (PDF)</button>
     </div>
+    <canvas id="topSpeciesChart"></canvas>
+    <canvas id="avgDurationChart"></canvas>
+    <canvas id="freqRangeChart"></canvas>
+    <canvas id="templatesPerSiteChart"></canvas>
   </div>
 
   <script>
-    // Global variables to store data
-    let sitesData = [];
-    let speciesData = [];
-    let templatesData = [];
-    let charts = {};
-
-    // Initialize map
-    const map = L.map("map").setView([1.1145, 37.4690], 10);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-
-    // Function to load CSV data
-    function loadCSV(url, callback) {
-      Papa.parse(url, {
-        download: true,
-        header: true,
-        complete: function(results) {
-          callback(results.data);
+    function filterData(tableId, filter) {
+      const table = document.getElementById(tableId);
+      const rows = table.getElementsByTagName("tr");
+      for (let i = 1; i < rows.length; i++) {
+        const cells = rows[i].getElementsByTagName("td");
+        let matched = false;
+        for (let j = 0; j < cells.length; j++) {
+          if (cells[j].textContent.toLowerCase().includes(filter.toLowerCase())) {
+            matched = true; break;
+          }
         }
-      });
-    }
-
-    // Function to toggle download options
-    function toggleDownloadOptions(chartId) {
-      const options = document.getElementById(chartId + 'Options');
-      options.classList.toggle('show-options');
-    }
-
-    // Function to download chart as image
-    function downloadChart(chartId, fileName) {
-      let element, options;
-      
-      if (chartId === 'map') {
-        // Special handling for map
-        map.once('rendercomplete', function() {
-          map.getContainer().querySelector('.leaflet-control-container').style.display = 'none';
-          html2canvas(map.getContainer()).then(function(canvas) {
-            const link = document.createElement('a');
-            link.download = fileName;
-            link.href = canvas.toDataURL();
-            link.click();
-            map.getContainer().querySelector('.leaflet-control-container').style.display = '';
-          });
-        });
-        map.invalidateSize();
-        return;
-      } else if (chartId === 'network') {
-        // Special handling for network
-        const networkContainer = document.getElementById('network');
-        html2canvas(networkContainer).then(function(canvas) {
-          const link = document.createElement('a');
-          link.download = fileName;
-          link.href = canvas.toDataURL();
-          link.click();
-        });
-        return;
-      }
-      
-      // Handle regular charts
-      const chart = charts[chartId];
-      if (chart) {
-        const link = document.createElement('a');
-        link.download = fileName;
-        link.href = chart.toBase64Image();
-        link.click();
+        rows[i].style.display = matched ? "" : "none";
       }
     }
 
-    // Function to create network graph
-    function createNetworkGraph(species) {
-      const container = document.getElementById('network');
-      const nodes = [];
-      const edges = [];
-      const taxonMap = {};
-      const speciesMap = {};
-      
-      // Process species data
-      species.forEach(sp => {
-        if (sp.taxon && sp.scientific_name) {
-          // Add taxon node if not exists
-          if (!taxonMap[sp.taxon]) {
-            taxonMap[sp.taxon] = true;
-            nodes.push({
-              id: sp.taxon,
-              label: sp.taxon,
-              group: 'taxon',
-              shape: 'box',
-              color: '#e67e22'
-            });
-          }
-          
-          // Add species node if not exists
-          if (!speciesMap[sp.scientific_name]) {
-            speciesMap[sp.scientific_name] = true;
-            nodes.push({
-              id: sp.scientific_name,
-              label: sp.scientific_name,
-              group: 'species',
-              color: '#2ecc71'
-            });
-          }
-          
-          // Add edge between taxon and species
-          edges.push({
-            from: sp.taxon,
-            to: sp.scientific_name
-          });
+    function downloadChartAs(canvasId, filename, type) {
+      const canvas = document.getElementById(canvasId);
+      html2canvas(canvas).then(canvas => {
+        if (type === 'png') {
+          canvas.toBlob(blob => saveAs(blob, filename + '.png'));
+        } else if (type === 'pdf') {
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF();
+          const imgData = canvas.toDataURL("image/png");
+          pdf.addImage(imgData, 'PNG', 10, 10, 180, 160);
+          pdf.save(filename + '.pdf');
         }
-      });
-      
-      // Create network data
-      const data = {
-        nodes: new vis.DataSet(nodes),
-        edges: new vis.DataSet(edges)
-      };
-      
-      // Network options
-      const options = {
-        layout: {
-          hierarchical: {
-            direction: 'UD',
-            sortMethod: 'directed'
-          }
-        },
-        physics: {
-          hierarchicalRepulsion: {
-            nodeDistance: 120
-          }
-        },
-        nodes: {
-          font: {
-            size: 12
-          },
-          margin: 10
-        },
-        edges: {
-          smooth: true
-        }
-      };
-      
-      // Create network
-      new vis.Network(container, data, options);
-    }
-
-    // Function to analyze templates data
-    function analyzeTemplatesData(templates) {
-      // 1. Average call duration by species
-      const durationBySpecies = {};
-      templates.forEach(t => {
-        if (t.scientific_name && t.duration_secs) {
-          if (!durationBySpecies[t.scientific_name]) {
-            durationBySpecies[t.scientific_name] = {
-              sum: 0,
-              count: 0
-            };
-          }
-          durationBySpecies[t.scientific_name].sum += parseFloat(t.duration_secs);
-          durationBySpecies[t.scientific_name].count++;
-        }
-      });
-      
-      const avgDurationData = {};
-      Object.keys(durationBySpecies).forEach(species => {
-        avgDurationData[species] = durationBySpecies[species].sum / durationBySpecies[species].count;
-      });
-      
-      // Create duration chart
-      charts.durationChart = new Chart(document.getElementById('durationChart'), {
-        type: 'bar',
-        data: {
-          labels: Object.keys(avgDurationData),
-          datasets: [{
-            label: 'Average Duration (seconds)',
-            data: Object.values(avgDurationData),
-            backgroundColor: '#3498db'
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { display: false }
-          }
-        }
-      });
-      
-      // 2. Frequency range by species
-      const freqRangeBySpecies = {};
-      templates.forEach(t => {
-        if (t.scientific_name && t.freq_min_hz && t.freq_max_hz) {
-          if (!freqRangeBySpecies[t.scientific_name]) {
-            freqRangeBySpecies[t.scientific_name] = {
-              min: [],
-              max: []
-            };
-          }
-          freqRangeBySpecies[t.scientific_name].min.push(parseFloat(t.freq_min_hz));
-          freqRangeBySpecies[t.scientific_name].max.push(parseFloat(t.freq_max_hz));
-        }
-      });
-      
-      const avgFreqRangeData = {};
-      Object.keys(freqRangeBySpecies).forEach(species => {
-        const avgMin = freqRangeBySpecies[species].min.reduce((a, b) => a + b, 0) / freqRangeBySpecies[species].min.length;
-        const avgMax = freqRangeBySpecies[species].max.reduce((a, b) => a + b, 0) / freqRangeBySpecies[species].max.length;
-        avgFreqRangeData[species] = {
-          min: avgMin,
-          max: avgMax
-        };
-      });
-      
-      // Create frequency chart
-      charts.frequencyChart = new Chart(document.getElementById('frequencyChart'), {
-        type: 'bar',
-        data: {
-          labels: Object.keys(avgFreqRangeData),
-          datasets: [
-            {
-              label: 'Average Min Frequency (Hz)',
-              data: Object.values(avgFreqRangeData).map(d => d.min),
-              backgroundColor: '#9b59b6'
-            },
-            {
-              label: 'Average Max Frequency (Hz)',
-              data: Object.values(avgFreqRangeData).map(d => d.max),
-              backgroundColor: '#e74c3c'
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          scales: {
-            x: {
-              stacked: false
-            },
-            y: {
-              stacked: false
-            }
-          }
-        }
-      });
-      
-      // 3. Recording time distribution
-      const timeDistribution = {
-        '00:00-04:00': 0,
-        '04:00-08:00': 0,
-        '08:00-12:00': 0,
-        '12:00-16:00': 0,
-        '16:00-20:00': 0,
-        '20:00-24:00': 0
-      };
-      
-      templates.forEach(t => {
-        if (t.recording_local_time) {
-          const time = t.recording_local_time.split(' ')[1];
-          const hour = parseInt(time.split(':')[0]);
-          
-          if (hour >= 0 && hour < 4) timeDistribution['00:00-04:00']++;
-          else if (hour >= 4 && hour < 8) timeDistribution['04:00-08:00']++;
-          else if (hour >= 8 && hour < 12) timeDistribution['08:00-12:00']++;
-          else if (hour >= 12 && hour < 16) timeDistribution['12:00-16:00']++;
-          else if (hour >= 16 && hour < 20) timeDistribution['16:00-20:00']++;
-          else timeDistribution['20:00-24:00']++;
-        }
-      });
-      
-      // Create time chart
-      charts.timeChart = new Chart(document.getElementById('timeChart'), {
-        type: 'pie',
-        data: {
-          labels: Object.keys(timeDistribution),
-          datasets: [{
-            data: Object.values(timeDistribution),
-            backgroundColor: [
-              '#1abc9c',
-              '#3498db',
-              '#9b59b6',
-              '#f1c40f',
-              '#e67e22',
-              '#e74c3c'
-            ]
-          }]
-        }
-      });
-      
-      // 4. Recordings by creator
-      const recordingsByCreator = {};
-      templates.forEach(t => {
-        if (t.template_created_by) {
-          const creator = t.template_created_by.split(' ')[0]; // Get first name
-          recordingsByCreator[creator] = (recordingsByCreator[creator] || 0) + 1;
-        }
-      });
-      
-      // Create creator chart
-      charts.creatorChart = new Chart(document.getElementById('creatorChart'), {
-        type: 'doughnut',
-        data: {
-          labels: Object.keys(recordingsByCreator),
-          datasets: [{
-            data: Object.values(recordingsByCreator),
-            backgroundColor: [
-              '#1abc9c',
-              '#3498db',
-              '#9b59b6',
-              '#f1c40f',
-              '#e67e22'
-            ]
-          }]
-        }
-      });
-      
-      // Populate template filter dropdown
-      const templateFilter = document.getElementById('templateFilter');
-      const speciesList = [...new Set(templates.map(t => t.scientific_name))].filter(Boolean);
-      speciesList.forEach(species => {
-        const option = document.createElement('option');
-        option.value = species;
-        option.textContent = species;
-        templateFilter.appendChild(option);
       });
     }
 
-    // Function to initialize dashboard
-    function initDashboard(sites, species, templates) {
-      sitesData = sites.filter(s => s.Name && s.Latitude && s.Longitude);
-      speciesData = species.filter(s => s.taxon && s.scientific_name);
-      templatesData = templates;
-      
-      // Process sites data
-      sitesData.forEach(site => {
-        site.Latitude = parseFloat(site.Latitude);
-        site.Longitude = parseFloat(site.Longitude);
-        site.Recordings_Count = parseInt(site.Recordings_Count) || 0;
-      });
-      
-      // Add markers to map
-      sitesData.forEach(site => {
-        if (!isNaN(site.Latitude) && !isNaN(site.Longitude)) {
-          L.marker([site.Latitude, site.Longitude]).addTo(map)
-            .bindPopup(`<b>${site.Name}</b><br>Recordings: ${site.Recordings_Count}`);
-        }
-      });
-      
-      // Total recordings count
-      const totalRecordings = sitesData.reduce((sum, site) => sum + site.Recordings_Count, 0);
-      
-      // Latest updated date
-      const dates = sitesData.map(site => new Date(site.Updated)).filter(d => !isNaN(d));
-      const lastUpdated = dates.length > 0 ? new Date(Math.max(...dates)).toLocaleDateString() : "N/A";
-      
-      document.getElementById('siteSummary').innerHTML = 
-        `<strong>Total Recordings:</strong> ${totalRecordings.toLocaleString()}<br>` +
-        `<strong>Last Update:</strong> ${lastUpdated}`;
-      
-      // Chart all sites
-      charts.allSitesChart = new Chart(document.getElementById('allSitesChart'), {
-        type: 'bar',
-        data: {
-          labels: sitesData.map(s => s.Name),
-          datasets: [{
-            label: 'Recordings Count',
-            data: sitesData.map(s => s.Recordings_Count),
-            backgroundColor: '#3498db'
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { display: false },
-            tooltip: { mode: 'index' },
-          },
-          scales: {
-            x: {
-              ticks: {
-                maxRotation: 90,
-                minRotation: 45,
-                autoSkip: false,
-              }
-            }
-          }
-        }
-      });
-      
-      // Taxon Pie Chart
-      const taxonCounts = {};
-      speciesData.forEach(sp => {
-        taxonCounts[sp.taxon] = (taxonCounts[sp.taxon] || 0) + 1;
-      });
-      
-      charts.taxonPieChart = new Chart(document.getElementById('taxonPieChart'), {
-        type: 'pie',
-        data: {
-          labels: Object.keys(taxonCounts),
-          datasets: [{
-            data: Object.values(taxonCounts),
-            backgroundColor: ['#1abc9c', '#e67e22', '#9b59b6', '#f39c12', '#2ecc71']
-          }]
-        }
-      });
-      
-      // Song Type Chart
-      const songTypeCounts = {};
-      speciesData.forEach(sp => {
-        songTypeCounts[sp.songtype] = (songTypeCounts[sp.songtype] || 0) + 1;
-      });
-      
-      charts.songTypeBarChart = new Chart(document.getElementById('songTypeBarChart'), {
-        type: 'bar',
-        data: {
-          labels: Object.keys(songTypeCounts),
-          datasets: [{
-            label: 'Count',
-            data: Object.values(songTypeCounts),
-            backgroundColor: '#2ecc71'
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { display: false } }
-        }
-      });
-      
-      // Create network graph
-      createNetworkGraph(speciesData);
-      
-      // Analyze templates data
-      analyzeTemplatesData(templatesData);
-      
-      // Populate species filter dropdown
-      const speciesFilter = document.getElementById('speciesFilter');
-      const taxonList = [...new Set(speciesData.map(s => s.taxon))].filter(Boolean);
-      taxonList.forEach(taxon => {
-        const option = document.createElement('option');
-        option.value = taxon;
-        option.textContent = taxon;
-        speciesFilter.appendChild(option);
-      });
-      
-      // Setup event listeners for filters
-      setupFilters();
-    }
-    
-    // Function to setup filter event listeners
-    function setupFilters() {
-      // Site search and sort
-      document.getElementById('siteSearch').addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
-        const sortValue = document.getElementById('siteSort').value;
-        
-        let filteredSites = sitesData.filter(site => 
-          site.Name.toLowerCase().includes(searchTerm)
-        );
-        
-        // Apply sorting
-        switch(sortValue) {
-          case 'name-asc':
-            filteredSites.sort((a, b) => a.Name.localeCompare(b.Name));
-            break;
-          case 'name-desc':
-            filteredSites.sort((a, b) => b.Name.localeCompare(a.Name));
-            break;
-          case 'count-asc':
-            filteredSites.sort((a, b) => a.Recordings_Count - b.Recordings_Count);
-            break;
-          case 'count-desc':
-            filteredSites.sort((a, b) => b.Recordings_Count - a.Recordings_Count);
-            break;
-        }
-        
-        // Update chart
-        charts.allSitesChart.data.labels = filteredSites.map(s => s.Name);
-        charts.allSitesChart.data.datasets[0].data = filteredSites.map(s => s.Recordings_Count);
-        charts.allSitesChart.update();
-      });
-      
-      document.getElementById('siteSort').addEventListener('change', function() {
-        document.getElementById('siteSearch').dispatchEvent(new Event('input'));
-      });
-      
-      // Species search and filter
-      document.getElementById('speciesSearch').addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
-        const taxonFilter = document.getElementById('speciesFilter').value;
-        
-        let filteredSpecies = speciesData.filter(species => 
-          species.scientific_name.toLowerCase().includes(searchTerm) &&
-          (taxonFilter === 'all' || species.taxon === taxonFilter)
-        );
-        
-        // Update network graph
-        createNetworkGraph(filteredSpecies);
-      });
-      
-      document.getElementById('speciesFilter').addEventListener('change', function() {
-        document.getElementById('speciesSearch').dispatchEvent(new Event('input'));
-      });
-      
-      // Template search and filter
-      document.getElementById('templateSearch').addEventListener('input', function() {
-        const searchTerm = this.value.toLowerCase();
-        const speciesFilter = document.getElementById('templateFilter').value;
-        
-        let filteredTemplates = templatesData.filter(template => 
-          template.template_name.toLowerCase().includes(searchTerm) &&
-          (speciesFilter === 'all' || template.scientific_name === speciesFilter)
-        );
-        
-        // Re-analyze with filtered data
-        analyzeTemplatesData(filteredTemplates);
-      });
-      
-      document.getElementById('templateFilter').addEventListener('change', function() {
-        document.getElementById('templateSearch').dispatchEvent(new Event('input'));
-      });
-    }
-
-    // Load all CSVs
-    Promise.all([
-      new Promise(resolve => loadCSV('sites-export.csv', resolve)),
-      new Promise(resolve => loadCSV('species-export.csv', resolve)),
-      new Promise(resolve => loadCSV('_templates.csv', resolve))
-    ]).then(([sitesData, speciesData, templatesData]) => {
-      initDashboard(sitesData, speciesData, templatesData);
-    }).catch(error => {
-      console.error("Error loading data:", error);
-    });
-
-    // Close download options when clicking elsewhere
-    document.addEventListener('click', function(e) {
-      if (!e.target.classList.contains('download-btn')) {
-        const options = document.querySelectorAll('.download-options');
-        options.forEach(opt => opt.classList.remove('show-options'));
-      }
-    });
+    // Your charts will be populated using embedded or separate JS based on the CSV files you’ve uploaded
+    // Placeholder for loading and rendering CSV data using fetch or embedded datasets
   </script>
-  
-  <!-- HTML2Canvas for exporting visualizations -->
-  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 </body>
 </html>

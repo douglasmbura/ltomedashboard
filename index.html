@@ -5,13 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bioacoustic Monitoring Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/vis-network/standalone/umd/vis-network.min.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/vis-network.min.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vis-network/standalone/umd/vis-network.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -25,32 +22,28 @@
       padding: 1rem;
       text-align: center;
     }
-    .section {
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
       padding: 20px;
-    }
-    .section h2 {
-      border-bottom: 2px solid #ccc;
-      padding-bottom: 5px;
-    }
-    .filter {
-      margin-bottom: 10px;
     }
     .card {
       background: white;
       border-radius: 8px;
       padding: 20px;
-      margin-bottom: 20px;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     }
-    #map {
+    #map, #networkGraph {
       height: 400px;
       width: 100%;
     }
-    canvas, #networkGraph {
+    canvas {
       max-width: 100%;
     }
-    .export-btns {
-      margin-top: 10px;
+    .summary {
+      font-size: 1rem;
+      margin-bottom: 1rem;
     }
   </style>
 </head>
@@ -59,64 +52,27 @@
     <h1>Bioacoustic Monitoring Dashboard</h1>
   </header>
 
-  <div class="section" id="sitesSection">
-    <h2>Sites Data</h2>
-    <input type="text" class="filter" id="siteFilter" placeholder="Search sites..." oninput="filterCards('siteCard', this.value)" />
-    <div class="card siteCard">
+  <div class="container">
+    <div class="card">
       <h3>Map of Recording Sites</h3>
       <div id="map"></div>
     </div>
-    <div class="card siteCard">
+    <div class="card">
       <h3>Recordings per Site</h3>
       <div class="summary" id="siteSummary"></div>
       <canvas id="allSitesChart"></canvas>
-      <div class="export-btns">
-        <button onclick="exportChart('allSitesChart')">Download Chart</button>
-      </div>
     </div>
-  </div>
-
-  <div class="section" id="speciesSection">
-    <h2>Species Data</h2>
-    <input type="text" class="filter" id="speciesFilter" placeholder="Search species..." oninput="filterCards('speciesCard', this.value)" />
-    <div class="card speciesCard">
+    <div class="card">
       <h3>Species Distribution by Taxon</h3>
       <canvas id="taxonPieChart"></canvas>
-      <div class="export-btns">
-        <button onclick="exportChart('taxonPieChart')">Download Chart</button>
-      </div>
     </div>
-    <div class="card speciesCard">
+    <div class="card">
       <h3>Species Song Types</h3>
       <canvas id="songTypeBarChart"></canvas>
-      <div class="export-btns">
-        <button onclick="exportChart('songTypeBarChart')">Download Chart</button>
-      </div>
     </div>
-    <div class="card speciesCard">
+    <div class="card">
       <h3>Taxon vs Scientific Name Network</h3>
-      <div id="networkGraph" style="height: 400px;"></div>
-    </div>
-  </div>
-
-  <div class="section" id="templatesSection">
-    <h2>Template Insights</h2>
-    <input type="text" class="filter" id="templateFilter" placeholder="Search insights..." oninput="filterCards('templateCard', this.value)" />
-    <div class="card templateCard">
-      <h3>Top Model Names</h3>
-      <canvas id="modelChart"></canvas>
-    </div>
-    <div class="card templateCard">
-      <h3>Confidence Distribution</h3>
-      <canvas id="confidenceChart"></canvas>
-    </div>
-    <div class="card templateCard">
-      <h3>Detections Over Time</h3>
-      <canvas id="trendChart"></canvas>
-    </div>
-    <div class="card templateCard">
-      <h3>Detections per Species</h3>
-      <canvas id="speciesCountChart"></canvas>
+      <div id="networkGraph"></div>
     </div>
   </div>
 
@@ -124,8 +80,9 @@
     const map = L.map("map").setView([1.1145, 37.4690], 10);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
-    function loadCSV(file, callback) {
-      Papa.parse(file, {
+    function loadCSV(url, callback) {
+      Papa.parse(url, {
+        download: true,
         header: true,
         complete: function(results) {
           callback(results.data);
@@ -133,48 +90,140 @@
       });
     }
 
-    function exportChart(canvasId) {
-      html2canvas(document.getElementById(canvasId)).then(canvas => {
-        const imgData = canvas.toDataURL("image/png");
-        const pdf = new jspdf.jsPDF();
-        pdf.addImage(imgData, 'PNG', 10, 10, 180, 90);
-        pdf.save(canvasId + '.pdf');
+    function initDashboard(sites, species) {
+      sites.forEach(site => {
+        site.Latitude = parseFloat(site.Latitude);
+        site.Longitude = parseFloat(site.Longitude);
+        site.Recordings_Count = parseInt(site.Recordings_Count);
+      });
 
-        const link = document.createElement('a');
-        link.download = canvasId + '.png';
-        link.href = imgData;
-        link.click();
+      // Add markers to map
+      sites.forEach(site => {
+        if (!isNaN(site.Latitude) && !isNaN(site.Longitude)) {
+          L.marker([site.Latitude, site.Longitude]).addTo(map)
+            .bindPopup(`<b>${site.Name}</b><br>Recordings: ${site.Recordings_Count}`);
+        }
+      });
+
+      const totalRecordings = sites.reduce((sum, site) => sum + (site.Recordings_Count || 0), 0);
+      const dates = sites.map(site => new Date(site.Updated)).filter(d => !isNaN(d));
+      const lastUpdated = dates.length > 0 ? new Date(Math.max(...dates)).toLocaleDateString() : "N/A";
+
+      document.getElementById('siteSummary').innerHTML = 
+        `<strong>Total Recordings:</strong> ${totalRecordings.toLocaleString()}<br>` +
+        `<strong>Last Update:</strong> ${lastUpdated}`;
+
+      new Chart(document.getElementById('allSitesChart'), {
+        type: 'bar',
+        data: {
+          labels: sites.map(s => s.Name),
+          datasets: [{
+            label: 'Recordings Count',
+            data: sites.map(s => s.Recordings_Count),
+            backgroundColor: '#3498db'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: { mode: 'index' },
+          },
+          scales: {
+            x: {
+              ticks: {
+                maxRotation: 90,
+                minRotation: 45,
+                autoSkip: false,
+              }
+            }
+          }
+        }
+      });
+
+      const taxonCounts = {};
+      const songTypeCounts = {};
+      const nodes = [];
+      const edges = [];
+      const nodeMap = {};
+
+      species.forEach(sp => {
+        if (sp.taxon) {
+          taxonCounts[sp.taxon] = (taxonCounts[sp.taxon] || 0) + 1;
+        }
+        if (sp.songtype) {
+          songTypeCounts[sp.songtype] = (songTypeCounts[sp.songtype] || 0) + 1;
+        }
+        if (sp.taxon && sp.scientificname) {
+          const taxonId = `T:${sp.taxon}`;
+          const sciId = `S:${sp.scientificname}`;
+
+          if (!nodeMap[taxonId]) {
+            nodes.push({ id: taxonId, label: sp.taxon, group: 'taxon' });
+            nodeMap[taxonId] = true;
+          }
+          if (!nodeMap[sciId]) {
+            nodes.push({ id: sciId, label: sp.scientificname, group: 'species' });
+            nodeMap[sciId] = true;
+          }
+
+          edges.push({ from: taxonId, to: sciId });
+        }
+      });
+
+      new Chart(document.getElementById('taxonPieChart'), {
+        type: 'pie',
+        data: {
+          labels: Object.keys(taxonCounts),
+          datasets: [{
+            data: Object.values(taxonCounts),
+            backgroundColor: ['#1abc9c', '#e67e22', '#9b59b6', '#f39c12', '#2ecc71']
+          }]
+        }
+      });
+
+      new Chart(document.getElementById('songTypeBarChart'), {
+        type: 'bar',
+        data: {
+          labels: Object.keys(songTypeCounts),
+          datasets: [{
+            label: 'Count',
+            data: Object.values(songTypeCounts),
+            backgroundColor: '#2ecc71'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      const network = new vis.Network(document.getElementById('networkGraph'), {
+        nodes: new vis.DataSet(nodes),
+        edges: new vis.DataSet(edges)
+      }, {
+        nodes: { shape: 'dot', size: 10 },
+        physics: { stabilization: true }
       });
     }
 
-    function filterCards(className, value) {
-      const cards = document.querySelectorAll(`.${className}`);
-      cards.forEach(card => {
-        card.style.display = card.innerText.toLowerCase().includes(value.toLowerCase()) ? '' : 'none';
+    // Load CSVs
+    Promise.all([
+      fetch('sites-export.csv').then(res => res.text()),
+      fetch('species-export.csv').then(res => res.text())
+    ]).then(([sitesText, speciesText]) => {
+      Papa.parse(sitesText, {
+        header: true,
+        complete: function(sitesResults) {
+          Papa.parse(speciesText, {
+            header: true,
+            complete: function(speciesResults) {
+              initDashboard(sitesResults.data, speciesResults.data);
+            }
+          });
+        }
       });
-    }
-
-    window.onload = function () {
-      fetch('sites-export.csv')
-        .then(res => res.text())
-        .then(sitesCSV => {
-          fetch('species-export.csv')
-            .then(res => res.text())
-            .then(speciesCSV => {
-              fetch('_templates.csv')
-                .then(res => res.text())
-                .then(templatesCSV => {
-                  loadCSV(sitesCSV, sites => {
-                    loadCSV(speciesCSV, species => {
-                      loadCSV(templatesCSV, templates => {
-                        initDashboard(sites, species, templates);
-                      });
-                    });
-                  });
-                });
-            });
-        });
-    }
+    });
   </script>
 </body>
 </html>

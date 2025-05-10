@@ -23,6 +23,16 @@
     .fullwidth { grid-column: span 2; }
     button { padding: 6px 12px; border: none; background-color: #2c3e50; color: white; border-radius: 4px; cursor: pointer; }
     button:hover { background-color: #34495e; }
+    .network-tooltip {
+      position: absolute;
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      pointer-events: none;
+      z-index: 100;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -54,6 +64,10 @@
     <div class="card">
       <h3>Taxon vs Scientific Name</h3>
       <div id="networkGraph"></div>
+      <div class="export-btns">
+        <button onclick="exportNetworkGraph()">Export PNG</button>
+      </div>
+      <div class="network-tooltip" id="networkTooltip"></div>
     </div>
     <div class="card">
       <h3>Species Song Types</h3>
@@ -91,7 +105,7 @@
   <script>
     const siteMap = L.map("map").setView([1.1145, 37.4690], 10);
     const detectionMap = L.map("detectionMap").setView([1.1145, 37.4690], 10);
-    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}");
+    const satelliteLayer = L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png");
     const standardLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
     standardLayer.addTo(siteMap);
     satelliteLayer.addTo(detectionMap);
@@ -118,6 +132,16 @@
       html2canvas(document.getElementById(divId)).then(canvas => {
         const link = document.createElement('a');
         link.download = divId + '.png';
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+      });
+    }
+
+    function exportNetworkGraph() {
+      const container = document.getElementById('networkGraph');
+      html2canvas(container).then(canvas => {
+        const link = document.createElement('a');
+        link.download = 'network-graph.png';
         link.href = canvas.toDataURL("image/png");
         link.click();
       });
@@ -195,17 +219,10 @@
         options: { responsive: true, plugins: { legend: { display: false } } }
       });
 
-      const taxonCounts = {}, songTypes = {}, nodes = [], edges = [], nodeMap = {};
+      const taxonCounts = {}, songTypes = {};
       species.forEach(sp => {
         if (sp.taxon) taxonCounts[sp.taxon] = (taxonCounts[sp.taxon] || 0) + 1;
         if (sp.songtype) songTypes[sp.songtype] = (songTypes[sp.songtype] || 0) + 1;
-        if (sp.taxon && sp.scientificname) {
-          const tId = `T:${sp.taxon}`;
-          const sId = `S:${sp.scientificname}`;
-          if (!nodeMap[tId]) { nodes.push({ id: tId, label: sp.taxon, group: 'taxon' }); nodeMap[tId] = true; }
-          if (!nodeMap[sId]) { nodes.push({ id: sId, label: sp.scientificname, group: 'species' }); nodeMap[sId] = true; }
-          edges.push({ from: tId, to: sId });
-        }
       });
 
       new Chart(document.getElementById('taxonPieChart'), {
@@ -225,13 +242,116 @@
         options: { responsive: true, plugins: { legend: { display: false } } }
       });
 
-      new vis.Network(document.getElementById('networkGraph'), {
-        nodes: new vis.DataSet(nodes),
-        edges: new vis.DataSet(edges)
-      }, {
-        nodes: { shape: 'dot', size: 10 },
-        physics: { stabilization: true },
-        layout: { improvedLayout: true }
+      // Create network graph
+      const nodes = new vis.DataSet();
+      const edges = new vis.DataSet();
+      const taxonNodes = new Set();
+      
+      // Add taxon nodes first
+      species.forEach(sp => {
+        if (sp.taxon && !taxonNodes.has(sp.taxon)) {
+          nodes.add({
+            id: sp.taxon,
+            label: sp.taxon,
+            group: 'taxon',
+            shape: 'box',
+            color: {
+              background: '#e67e22',
+              border: '#d35400',
+              highlight: { background: '#e67e22', border: '#d35400' }
+            },
+            font: { size: 14 }
+          });
+          taxonNodes.add(sp.taxon);
+        }
+      });
+      
+      // Add species nodes and edges
+      species.forEach(sp => {
+        if (sp.taxon && sp.scientific_name) {
+          nodes.add({
+            id: sp.scientific_name,
+            label: sp.scientific_name,
+            group: 'species',
+            shape: 'ellipse',
+            color: {
+              background: '#3498db',
+              border: '#2980b9',
+              highlight: { background: '#3498db', border: '#2980b9' }
+            },
+            font: { size: 12 }
+          });
+          edges.add({
+            from: sp.taxon,
+            to: sp.scientific_name,
+            arrows: 'to',
+            smooth: { type: 'curvedCW', roundness: 0.2 }
+          });
+        }
+      });
+
+      const container = document.getElementById('networkGraph');
+      const data = { nodes: nodes, edges: edges };
+      const options = {
+        nodes: {
+          borderWidth: 1,
+          shadow: true
+        },
+        edges: {
+          width: 1,
+          shadow: true,
+          smooth: true
+        },
+        physics: {
+          barnesHut: {
+            gravitationalConstant: -2000,
+            centralGravity: 0.3,
+            springLength: 200,
+            springConstant: 0.04,
+            damping: 0.09,
+            avoidOverlap: 0.1
+          }
+        },
+        layout: {
+          improvedLayout: true
+        },
+        interaction: {
+          hover: true,
+          tooltipDelay: 200
+        }
+      };
+
+      const network = new vis.Network(container, data, options);
+      
+      // Add tooltip functionality
+      const tooltip = document.getElementById('networkTooltip');
+      
+      network.on("hoverNode", function(params) {
+        const nodeId = params.node;
+        const node = nodes.get(nodeId);
+        if (node) {
+          const speciesInfo = species.find(sp => sp.scientific_name === node.label);
+          if (speciesInfo) {
+            tooltip.innerHTML = `
+              <strong>${node.label}</strong><br>
+              Taxon: ${speciesInfo.taxon || 'Unknown'}<br>
+              Family: ${speciesInfo.family || 'Unknown'}<br>
+              Song Type: ${speciesInfo.songtype || 'Unknown'}
+            `;
+            tooltip.style.display = 'block';
+          }
+        }
+      });
+      
+      network.on("blurNode", function() {
+        tooltip.style.display = 'none';
+      });
+      
+      // Track mouse movement for tooltip
+      container.addEventListener('mousemove', (e) => {
+        const rect = container.getBoundingClientRect();
+        tooltip.style.left = `${e.clientX - rect.left + 10}px`;
+        tooltip.style.top = `${e.clientY - rect.top + 10}px`;
       });
     }
 

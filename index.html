@@ -1,229 +1,710 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bioacoustic Monitoring Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/vis-network/standalone/umd/vis-network.min.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #f4f4f4;
-    }
-    header {
-      background: #2c3e50;
-      color: #fff;
-      padding: 1rem;
-      text-align: center;
-    }
-    .container {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      padding: 20px;
-    }
-    .card {
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    }
-    #map, #networkGraph {
-      height: 400px;
-      width: 100%;
-    }
-    canvas {
-      max-width: 100%;
-    }
-    .summary {
-      font-size: 1rem;
-      margin-bottom: 1rem;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wildlife Audio Analytics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.16.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas2image@1.0.5"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.0/papaparse.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            width: 95%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .dashboard-section {
+            background-color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+        .map-container {
+            height: 500px;
+            margin-bottom: 20px;
+        }
+        .download-buttons {
+            margin-top: 10px;
+            text-align: right;
+        }
+        .download-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            margin-left: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .download-btn:hover {
+            background-color: #2980b9;
+        }
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .filter-item {
+            flex: 1;
+            min-width: 200px;
+        }
+        select, input {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .stats-cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            flex: 1;
+            min-width: 200px;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+    </style>
 </head>
 <body>
-  <header>
-    <h1>Bioacoustic Monitoring Dashboard</h1>
-  </header>
+    <div class="container">
+        <div class="header">
+            <h1>Wildlife Audio Analytics Dashboard</h1>
+            <p>Visualizing acoustic data from wildlife recordings</p>
+        </div>
 
-  <div class="container">
-    <div class="card">
-      <h3>Map of Recording Sites</h3>
-      <div id="map"></div>
-    </div>
-    <div class="card">
-      <h3>Recordings per Site</h3>
-      <div class="summary" id="siteSummary"></div>
-      <canvas id="allSitesChart"></canvas>
-    </div>
-    <div class="card">
-      <h3>Species Distribution by Taxon</h3>
-      <canvas id="taxonPieChart"></canvas>
-    </div>
-    <div class="card">
-      <h3>Species Song Types</h3>
-      <canvas id="songTypeBarChart"></canvas>
-    </div>
-    <div class="card">
-      <h3>Taxon vs Scientific Name Network</h3>
-      <div id="networkGraph"></div>
-    </div>
-  </div>
+        <div class="filters">
+            <div class="filter-item">
+                <label for="species-filter">Filter by Species:</label>
+                <select id="species-filter" onchange="updateCharts()">
+                    <option value="all">All Species</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label for="site-filter">Filter by Site:</label>
+                <select id="site-filter" onchange="updateCharts()">
+                    <option value="all">All Sites</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label for="songtype-filter">Filter by Song Type:</label>
+                <select id="songtype-filter" onchange="updateCharts()">
+                    <option value="all">All Types</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label for="date-range">Date Range:</label>
+                <input type="text" id="date-range" placeholder="Select date range" onchange="updateCharts()">
+            </div>
+        </div>
 
-  <script>
-    const map = L.map("map").setView([1.1145, 37.4690], 10);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+        <div class="stats-cards">
+            <div class="stat-card">
+                <div class="stat-value" id="total-recordings">0</div>
+                <div class="stat-label">Total Recordings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="unique-species">0</div>
+                <div class="stat-label">Unique Species</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="active-sites">0</div>
+                <div class="stat-label">Recording Sites</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="avg-duration">0</div>
+                <div class="stat-label">Avg Duration (sec)</div>
+            </div>
+        </div>
 
-    function loadCSV(url, callback) {
-      Papa.parse(url, {
-        download: true,
-        header: true,
-        complete: function(results) {
-          callback(results.data);
+        <div class="dashboard-section">
+            <h2>Species Distribution</h2>
+            <div class="chart-container">
+                <canvas id="speciesChart"></canvas>
+                <div class="download-buttons">
+                    <button class="download-btn" onclick="downloadChart('speciesChart', 'png')">Download PNG</button>
+                    <button class="download-btn" onclick="downloadChart('speciesChart', 'pdf')">Download PDF</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-section">
+            <h2>Geographic Distribution</h2>
+            <div class="map-container" id="map"></div>
+            <div class="download-buttons">
+                <button class="download-btn" onclick="downloadMap('png')">Download PNG</button>
+                <button class="download-btn" onclick="downloadMap('pdf')">Download PDF</button>
+            </div>
+        </div>
+
+        <div class="dashboard-section">
+            <h2>Temporal Analysis</h2>
+            <div class="chart-container">
+                <canvas id="timeChart"></canvas>
+                <div class="download-buttons">
+                    <button class="download-btn" onclick="downloadChart('timeChart', 'png')">Download PNG</button>
+                    <button class="download-btn" onclick="downloadChart('timeChart', 'pdf')">Download PDF</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-section">
+            <h2>Acoustic Characteristics</h2>
+            <div class="chart-container">
+                <canvas id="frequencyChart"></canvas>
+                <div class="download-buttons">
+                    <button class="download-btn" onclick="downloadChart('frequencyChart', 'png')">Download PNG</button>
+                    <button class="download-btn" onclick="downloadChart('frequencyChart', 'pdf')">Download PDF</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="durationChart"></canvas>
+                <div class="download-buttons">
+                    <button class="download-btn" onclick="downloadChart('durationChart', 'png')">Download PNG</button>
+                    <button class="download-btn" onclick="downloadChart('durationChart', 'pdf')">Download PDF</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-section">
+            <h2>Contributor Statistics</h2>
+            <div class="chart-container">
+                <canvas id="contributorChart"></canvas>
+                <div class="download-buttons">
+                    <button class="download-btn" onclick="downloadChart('contributorChart', 'png')">Download PNG</button>
+                    <button class="download-btn" onclick="downloadChart('contributorChart', 'pdf')">Download PDF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let audioData = [];
+        let filteredData = [];
+        let map;
+        let mapImage;
+        
+        // Load data from CSV
+        function loadData() {
+            Papa.parse("_templates.csv", {
+                download: true,
+                header: true,
+                complete: function(results) {
+                    audioData = results.data;
+                    filteredData = [...audioData];
+                    
+                    // Initialize filters
+                    initFilters();
+                    
+                    // Update all charts
+                    updateCharts();
+                    
+                    // Initialize map
+                    initMap();
+                }
+            });
         }
-      });
-    }
-
-    function initDashboard(sites, species) {
-      sites.forEach(site => {
-        site.Latitude = parseFloat(site.Latitude);
-        site.Longitude = parseFloat(site.Longitude);
-        site.Recordings_Count = parseInt(site.Recordings_Count);
-      });
-
-      // Add markers to map
-      sites.forEach(site => {
-        if (!isNaN(site.Latitude) && !isNaN(site.Longitude)) {
-          L.marker([site.Latitude, site.Longitude]).addTo(map)
-            .bindPopup(`<b>${site.Name}</b><br>Recordings: ${site.Recordings_Count}`);
+        
+        // Initialize filters
+        function initFilters() {
+            const speciesFilter = document.getElementById('species-filter');
+            const siteFilter = document.getElementById('site-filter');
+            const songtypeFilter = document.getElementById('songtype-filter');
+            
+            // Get unique values for filters
+            const species = [...new Set(audioData.map(item => item.scientific_name))];
+            const sites = [...new Set(audioData.map(item => item.site_name))];
+            const songtypes = [...new Set(audioData.map(item => item.songtype))];
+            
+            // Populate species filter
+            species.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s;
+                option.textContent = s;
+                speciesFilter.appendChild(option);
+            });
+            
+            // Populate site filter
+            sites.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s;
+                option.textContent = s;
+                siteFilter.appendChild(option);
+            });
+            
+            // Populate songtype filter
+            songtypes.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s;
+                option.textContent = s;
+                songtypeFilter.appendChild(option);
+            });
+            
+            // Initialize date range picker (simplified for this example)
+            document.getElementById('date-range').placeholder = "All dates";
         }
-      });
-
-      const totalRecordings = sites.reduce((sum, site) => sum + (site.Recordings_Count || 0), 0);
-      const dates = sites.map(site => new Date(site.Updated)).filter(d => !isNaN(d));
-      const lastUpdated = dates.length > 0 ? new Date(Math.max(...dates)).toLocaleDateString() : "N/A";
-
-      document.getElementById('siteSummary').innerHTML = 
-        `<strong>Total Recordings:</strong> ${totalRecordings.toLocaleString()}<br>` +
-        `<strong>Last Update:</strong> ${lastUpdated}`;
-
-      new Chart(document.getElementById('allSitesChart'), {
-        type: 'bar',
-        data: {
-          labels: sites.map(s => s.Name),
-          datasets: [{
-            label: 'Recordings Count',
-            data: sites.map(s => s.Recordings_Count),
-            backgroundColor: '#3498db'
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { display: false },
-            tooltip: { mode: 'index' },
-          },
-          scales: {
-            x: {
-              ticks: {
-                maxRotation: 90,
-                minRotation: 45,
-                autoSkip: false,
-              }
+        
+        // Filter data based on selections
+        function filterData() {
+            const species = document.getElementById('species-filter').value;
+            const site = document.getElementById('site-filter').value;
+            const songtype = document.getElementById('songtype-filter').value;
+            
+            filteredData = audioData.filter(item => {
+                return (species === 'all' || item.scientific_name === species) &&
+                       (site === 'all' || item.site_name === site) &&
+                       (songtype === 'all' || item.songtype === songtype);
+            });
+        }
+        
+        // Update all charts
+        function updateCharts() {
+            filterData();
+            updateStats();
+            updateSpeciesChart();
+            updateTimeChart();
+            updateFrequencyChart();
+            updateDurationChart();
+            updateContributorChart();
+            updateMap();
+        }
+        
+        // Update statistics cards
+        function updateStats() {
+            document.getElementById('total-recordings').textContent = filteredData.length;
+            
+            const uniqueSpecies = new Set(filteredData.map(item => item.scientific_name)).size;
+            document.getElementById('unique-species').textContent = uniqueSpecies;
+            
+            const uniqueSites = new Set(filteredData.map(item => item.site_name)).size;
+            document.getElementById('active-sites').textContent = uniqueSites;
+            
+            const avgDuration = filteredData.reduce((sum, item) => sum + parseFloat(item.duration_secs), 0) / filteredData.length;
+            document.getElementById('avg-duration').textContent = avgDuration.toFixed(2);
+        }
+        
+        // Update species distribution chart
+        function updateSpeciesChart() {
+            const speciesCount = {};
+            filteredData.forEach(item => {
+                speciesCount[item.scientific_name] = (speciesCount[item.scientific_name] || 0) + 1;
+            });
+            
+            const ctx = document.getElementById('speciesChart').getContext('2d');
+            
+            if (window.speciesChart) {
+                window.speciesChart.destroy();
             }
-          }
+            
+            window.speciesChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(speciesCount),
+                    datasets: [{
+                        label: 'Number of Recordings',
+                        data: Object.values(speciesCount),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.7)',
+                            'rgba(54, 162, 235, 0.7)',
+                            'rgba(255, 206, 86, 0.7)',
+                            'rgba(75, 192, 192, 0.7)',
+                            'rgba(153, 102, 255, 0.7)',
+                            'rgba(255, 159, 64, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Recordings by Species'
+                        },
+                        legend: {
+                            display: false
+                        },
+                        datalabels: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Recordings'
+                            }
+                        }
+                    }
+                }
+            });
         }
-      });
-
-      const taxonCounts = {};
-      const songTypeCounts = {};
-      const nodes = [];
-      const edges = [];
-      const nodeMap = {};
-
-      species.forEach(sp => {
-        if (sp.taxon) {
-          taxonCounts[sp.taxon] = (taxonCounts[sp.taxon] || 0) + 1;
-        }
-        if (sp.songtype) {
-          songTypeCounts[sp.songtype] = (songTypeCounts[sp.songtype] || 0) + 1;
-        }
-        if (sp.taxon && sp.scientificname) {
-          const taxonId = `T:${sp.taxon}`;
-          const sciId = `S:${sp.scientificname}`;
-
-          if (!nodeMap[taxonId]) {
-            nodes.push({ id: taxonId, label: sp.taxon, group: 'taxon' });
-            nodeMap[taxonId] = true;
-          }
-          if (!nodeMap[sciId]) {
-            nodes.push({ id: sciId, label: sp.scientificname, group: 'species' });
-            nodeMap[sciId] = true;
-          }
-
-          edges.push({ from: taxonId, to: sciId });
-        }
-      });
-
-      new Chart(document.getElementById('taxonPieChart'), {
-        type: 'pie',
-        data: {
-          labels: Object.keys(taxonCounts),
-          datasets: [{
-            data: Object.values(taxonCounts),
-            backgroundColor: ['#1abc9c', '#e67e22', '#9b59b6', '#f39c12', '#2ecc71']
-          }]
-        }
-      });
-
-      new Chart(document.getElementById('songTypeBarChart'), {
-        type: 'bar',
-        data: {
-          labels: Object.keys(songTypeCounts),
-          datasets: [{
-            label: 'Count',
-            data: Object.values(songTypeCounts),
-            backgroundColor: '#2ecc71'
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { display: false } }
-        }
-      });
-
-      const network = new vis.Network(document.getElementById('networkGraph'), {
-        nodes: new vis.DataSet(nodes),
-        edges: new vis.DataSet(edges)
-      }, {
-        nodes: { shape: 'dot', size: 10 },
-        physics: { stabilization: true }
-      });
-    }
-
-    // Load CSVs
-    Promise.all([
-      fetch('sites-export.csv').then(res => res.text()),
-      fetch('species-export.csv').then(res => res.text())
-    ]).then(([sitesText, speciesText]) => {
-      Papa.parse(sitesText, {
-        header: true,
-        complete: function(sitesResults) {
-          Papa.parse(speciesText, {
-            header: true,
-            complete: function(speciesResults) {
-              initDashboard(sitesResults.data, speciesResults.data);
+        
+        // Update time distribution chart
+        function updateTimeChart() {
+            // Group by hour of day
+            const hours = Array(24).fill(0);
+            filteredData.forEach(item => {
+                const time = new Date(item.recording_local_time);
+                const hour = time.getHours();
+                hours[hour]++;
+            });
+            
+            const ctx = document.getElementById('timeChart').getContext('2d');
+            
+            if (window.timeChart) {
+                window.timeChart.destroy();
             }
-          });
+            
+            window.timeChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+                    datasets: [{
+                        label: 'Recordings per Hour',
+                        data: hours,
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Recording Activity by Time of Day'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Recordings'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Hour of Day'
+                            }
+                        }
+                    }
+                }
+            });
         }
-      });
-    });
-  </script>
+        
+        // Update frequency characteristics chart
+        function updateFrequencyChart() {
+            const species = [...new Set(filteredData.map(item => item.scientific_name))];
+            const datasets = [];
+            
+            species.forEach(s => {
+                const speciesData = filteredData.filter(item => item.scientific_name === s);
+                const freqMins = speciesData.map(item => parseFloat(item.freq_min_hz));
+                const freqMaxs = speciesData.map(item => parseFloat(item.freq_max_hz));
+                
+                datasets.push({
+                    label: `${s} - Min Frequency`,
+                    data: freqMins,
+                    backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 1
+                });
+                
+                datasets.push({
+                    label: `${s} - Max Frequency`,
+                    data: freqMaxs,
+                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                });
+            });
+            
+            const ctx = document.getElementById('frequencyChart').getContext('2d');
+            
+            if (window.frequencyChart) {
+                window.frequencyChart.destroy();
+            }
+            
+            window.frequencyChart = new Chart(ctx, {
+                type: 'boxplot',
+                data: {
+                    labels: filteredData.map(item => item.template_name),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Frequency Range Distribution (Hz)'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Frequency (Hz)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Update duration characteristics chart
+        function updateDurationChart() {
+            const species = [...new Set(filteredData.map(item => item.scientific_name))];
+            const datasets = [];
+            
+            species.forEach(s => {
+                const durations = filteredData
+                    .filter(item => item.scientific_name === s)
+                    .map(item => parseFloat(item.duration_secs));
+                
+                datasets.push({
+                    label: s,
+                    data: durations,
+                    backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                });
+            });
+            
+            const ctx = document.getElementById('durationChart').getContext('2d');
+            
+            if (window.durationChart) {
+                window.durationChart.destroy();
+            }
+            
+            window.durationChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: filteredData.map(item => item.template_name),
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Recording Duration by Species (seconds)'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Duration (seconds)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Update contributor statistics chart
+        function updateContributorChart() {
+            const contributors = {};
+            filteredData.forEach(item => {
+                const creator = item.template_created_by.split(' ')[0]; // Just get first name
+                contributors[creator] = (contributors[creator] || 0) + 1;
+            });
+            
+            const ctx = document.getElementById('contributorChart').getContext('2d');
+            
+            if (window.contributorChart) {
+                window.contributorChart.destroy();
+            }
+            
+            window.contributorChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(contributors),
+                    datasets: [{
+                        data: Object.values(contributors),
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.7)',
+                            'rgba(54, 162, 235, 0.7)',
+                            'rgba(255, 206, 86, 0.7)',
+                            'rgba(75, 192, 192, 0.7)',
+                            'rgba(153, 102, 255, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Recordings by Contributor'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([1.11567, 37.46021], 10);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            
+            updateMap();
+        }
+        
+        // Update map with markers
+        function updateMap() {
+            // Clear existing markers
+            map.eachLayer(layer => {
+                if (layer instanceof L.Marker) {
+                    map.removeLayer(layer);
+                }
+            });
+            
+            // Add new markers
+            filteredData.forEach(item => {
+                if (item.site_latitude && item.site_longitude) {
+                    const lat = parseFloat(item.site_latitude);
+                    const lng = parseFloat(item.site_longitude);
+                    
+                    L.marker([lat, lng])
+                        .addTo(map)
+                        .bindPopup(`
+                            <b>${item.scientific_name}</b><br>
+                            ${item.template_name}<br>
+                            ${item.recording_local_time}<br>
+                            Duration: ${item.duration_secs}s<br>
+                            Freq: ${item.freq_min_hz}-${item.freq_max_hz}Hz
+                        `);
+                }
+            });
+            
+            // Fit bounds to show all markers
+            if (filteredData.length > 0) {
+                const bounds = filteredData
+                    .filter(item => item.site_latitude && item.site_longitude)
+                    .map(item => [parseFloat(item.site_latitude), parseFloat(item.site_longitude)]);
+                
+                if (bounds.length > 0) {
+                    map.fitBounds(bounds);
+                }
+            }
+        }
+        
+        // Download chart as image or PDF
+        function downloadChart(chartId, format) {
+            const canvas = document.getElementById(chartId);
+            const filename = `${chartId}_${new Date().toISOString().slice(0,10)}`;
+            
+            if (format === 'png') {
+                const link = document.createElement('a');
+                link.download = `${filename}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } else if (format === 'pdf') {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                doc.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, 180, 100);
+                doc.save(`${filename}.pdf`);
+            }
+        }
+        
+        // Download map as image or PDF
+        function downloadMap(format) {
+            const filename = `map_${new Date().toISOString().slice(0,10)}`;
+            
+            // For simplicity, we'll use leaflet's built-in export (requires additional plugins in real implementation)
+            if (format === 'png') {
+                // In a real implementation, you would use leaflet-image plugin
+                alert("In a full implementation, this would export the map as PNG. For now, please take a screenshot.");
+            } else if (format === 'pdf') {
+                // In a real implementation, you would use leaflet-image and jsPDF
+                alert("In a full implementation, this would export the map as PDF. For now, please take a screenshot.");
+            }
+        }
+        
+        // Initialize the dashboard when page loads
+        window.onload = function() {
+            loadData();
+        };
+    </script>
 </body>
 </html>

@@ -103,12 +103,19 @@
   </div>
 
   <script>
+    // Initialize maps with ESRI satellite layer
+    const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+    });
+
     const siteMap = L.map("map").setView([1.1145, 37.4690], 10);
     const detectionMap = L.map("detectionMap").setView([1.1145, 37.4690], 10);
-    const satelliteLayer = L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png");
-    const standardLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
-    standardLayer.addTo(siteMap);
-    satelliteLayer.addTo(detectionMap);
+    
+    // Add standard OSM layer to sites map
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(siteMap);
+    
+    // Add ESRI satellite layer to detection map
+    esriSatellite.addTo(detectionMap);
 
     function exportChart(canvasId) {
       html2canvas(document.getElementById(canvasId)).then(canvas => {
@@ -242,56 +249,57 @@
         options: { responsive: true, plugins: { legend: { display: false } } }
       });
 
-      // Create network graph
-      const nodes = new vis.DataSet();
-      const edges = new vis.DataSet();
-      const taxonNodes = new Set();
+      // Create network graph with proper data structure
+      const nodes = [];
+      const edges = [];
+      const taxonMap = {};
       
-      // Add taxon nodes first
+      // First pass: create taxon nodes
       species.forEach(sp => {
-        if (sp.taxon && !taxonNodes.has(sp.taxon)) {
-          nodes.add({
+        if (sp.taxon && !taxonMap[sp.taxon]) {
+          nodes.push({
             id: sp.taxon,
             label: sp.taxon,
             group: 'taxon',
             shape: 'box',
             color: {
               background: '#e67e22',
-              border: '#d35400',
-              highlight: { background: '#e67e22', border: '#d35400' }
+              border: '#d35400'
             },
             font: { size: 14 }
           });
-          taxonNodes.add(sp.taxon);
+          taxonMap[sp.taxon] = true;
         }
       });
       
-      // Add species nodes and edges
+      // Second pass: create species nodes and edges
       species.forEach(sp => {
         if (sp.taxon && sp.scientific_name) {
-          nodes.add({
+          nodes.push({
             id: sp.scientific_name,
             label: sp.scientific_name,
             group: 'species',
             shape: 'ellipse',
             color: {
               background: '#3498db',
-              border: '#2980b9',
-              highlight: { background: '#3498db', border: '#2980b9' }
+              border: '#2980b9'
             },
             font: { size: 12 }
           });
-          edges.add({
+          edges.push({
             from: sp.taxon,
             to: sp.scientific_name,
-            arrows: 'to',
-            smooth: { type: 'curvedCW', roundness: 0.2 }
+            arrows: 'to'
           });
         }
       });
 
+      // Create the network
       const container = document.getElementById('networkGraph');
-      const data = { nodes: nodes, edges: edges };
+      const data = {
+        nodes: nodes,
+        edges: edges
+      };
       const options = {
         nodes: {
           borderWidth: 1,
@@ -300,7 +308,9 @@
         edges: {
           width: 1,
           shadow: true,
-          smooth: true
+          smooth: {
+            type: 'continuous'
+          }
         },
         physics: {
           barnesHut: {
@@ -328,15 +338,17 @@
       
       network.on("hoverNode", function(params) {
         const nodeId = params.node;
-        const node = nodes.get(nodeId);
+        const node = nodes.find(n => n.id === nodeId);
         if (node) {
-          const speciesInfo = species.find(sp => sp.scientific_name === node.label);
+          const speciesInfo = species.find(sp => 
+            sp.scientific_name === node.label || sp.taxon === node.label
+          );
           if (speciesInfo) {
             tooltip.innerHTML = `
               <strong>${node.label}</strong><br>
-              Taxon: ${speciesInfo.taxon || 'Unknown'}<br>
-              Family: ${speciesInfo.family || 'Unknown'}<br>
-              Song Type: ${speciesInfo.songtype || 'Unknown'}
+              ${speciesInfo.taxon ? `Taxon: ${speciesInfo.taxon}<br>` : ''}
+              ${speciesInfo.family ? `Family: ${speciesInfo.family}<br>` : ''}
+              ${speciesInfo.songtype ? `Song Type: ${speciesInfo.songtype}` : ''}
             `;
             tooltip.style.display = 'block';
           }

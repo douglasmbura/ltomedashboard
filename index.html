@@ -3,112 +3,719 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Detection Dashboard</title>
+  <title>Bioacoustic Monitoring Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
+    :root {
+      --primary-color: #2c3e50;
+      --secondary-color: #3498db;
+      --accent-color: #e74c3c;
+      --light-color: #f9f9f9;
+      --dark-color: #333;
+      --success-color: #2ecc71;
+      --bird-color: #1abc9c;
+      --mammal-color: #e67e22;
+      --amphibian-color: #9b59b6;
+      --other-color: #95a5a6;
+    }
+    
     body {
-      font-family: sans-serif;
-      background: #f9f9f9;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--light-color);
       margin: 0;
+      color: var(--dark-color);
+      line-height: 1.6;
     }
+    
     header {
-      background-color: #2c3e50;
+      background-color: var(--primary-color);
       color: white;
+      padding: 1.5rem;
       text-align: center;
-      padding: 1rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      position: relative;
     }
+    
     .container {
       display: grid;
-      grid-template-columns: 1fr;
-      gap: 20px;
-      padding: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+      gap: 25px;
+      padding: 25px;
+      max-width: 1800px;
+      margin: 0 auto;
     }
+    
     .card {
       background: white;
-      border-radius: 10px;
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 12px;
+      padding: 25px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
-    #map {
+    
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+    }
+    
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 15px;
+    }
+    
+    .card h3 {
+      margin: 0;
+      color: var(--primary-color);
+      font-size: 1.4rem;
+    }
+    
+    #map, #sitesMap {
       height: 400px;
+      border-radius: 8px;
+      overflow: hidden;
     }
+    
+    canvas {
+      max-width: 100%;
+      height: auto !important;
+    }
+    
     .export-btns {
-      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
     }
+    
+    .btn {
+      padding: 8px 15px;
+      border: none;
+      border-radius: 6px;
+      background-color: var(--secondary-color);
+      color: white;
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: background-color 0.2s;
+    }
+    
+    .btn:hover {
+      background-color: #2980b9;
+    }
+    
+    .btn-export {
+      background-color: var(--accent-color);
+    }
+    
+    .btn-export:hover {
+      background-color: #c0392b;
+    }
+    
     .loading {
       text-align: center;
-      padding: 20px;
+      padding: 30px;
       font-style: italic;
       color: #666;
+      font-size: 1.1rem;
+    }
+    
+    .search-container {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    
+    .search-input {
+      flex: 1;
+      padding: 10px 15px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+    
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .stat-card {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      text-align: center;
+    }
+    
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: var(--primary-color);
+      margin: 5px 0;
+    }
+    
+    .stat-label {
+      font-size: 0.9rem;
+      color: #666;
+    }
+    
+    .filters {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .filter-label {
+      font-size: 0.9rem;
+      margin-bottom: 5px;
+      color: #666;
+    }
+    
+    .filter-select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      min-width: 150px;
+    }
+    
+    .tab-container {
+      margin-bottom: 20px;
+    }
+    
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #ddd;
+    }
+    
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.3s;
+    }
+    
+    .tab.active {
+      border-bottom-color: var(--secondary-color);
+      color: var(--secondary-color);
+      font-weight: bold;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      font-size: 0.9rem;
+    }
+    
+    .legend-color {
+      width: 15px;
+      height: 15px;
+      border-radius: 3px;
+      margin-right: 5px;
+    }
+    
+    .network-container {
+      width: 100%;
+      height: 400px;
+      position: relative;
+    }
+    
+    .network-tooltip {
+      position: absolute;
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      pointer-events: none;
+      z-index: 100;
+      display: none;
+    }
+    
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+        padding: 15px;
+      }
+      
+      .summary-stats {
+        grid-template-columns: 1fr 1fr;
+      }
+      
+      .filters {
+        flex-direction: column;
+      }
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Bioacoustic Detection Dashboard</h1>
+    <h1>Bioacoustic Monitoring Dashboard</h1>
+    <p>Comprehensive visualization of acoustic detection data across multiple sites</p>
   </header>
 
   <div class="container">
-    <div id="loading" class="loading">Loading data...</div>
+    <div id="loading" class="loading">
+      <i class="fas fa-spinner fa-spin"></i> Loading data...
+    </div>
     
+    <!-- Summary Statistics -->
+    <div class="card" style="display:none;" id="summaryCard">
+      <h3>Summary Statistics</h3>
+      <div class="summary-stats">
+        <div class="stat-card">
+          <div class="stat-value" id="totalDetections">0</div>
+          <div class="stat-label">Total Detections</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="uniqueSpecies">0</div>
+          <div class="stat-label">Unique Species</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="recordingSites">0</div>
+          <div class="stat-label">Recording Sites</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="timePeriod">-</div>
+          <div class="stat-label">Time Period</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="card" style="display:none;" id="filterCard">
+      <h3>Data Filters</h3>
+      <div class="search-container">
+        <input type="text" id="searchInput" class="search-input" placeholder="Search species, sites, or dates...">
+        <button class="btn" onclick="applyFilters()">
+          <i class="fas fa-search"></i> Search
+        </button>
+      </div>
+      <div class="filters">
+        <div class="filter-group">
+          <label class="filter-label">Species</label>
+          <select id="speciesFilter" class="filter-select" multiple>
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Site</label>
+          <select id="siteFilter" class="filter-select" multiple>
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Date Range</label>
+          <input type="date" id="dateFrom" class="filter-select">
+          <input type="date" id="dateTo" class="filter-select" style="margin-top: 5px;">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Song Type</label>
+          <select id="songTypeFilter" class="filter-select" multiple>
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Taxon</label>
+          <select id="taxonFilter" class="filter-select" multiple>
+            <!-- Populated dynamically -->
+          </select>
+        </div>
+      </div>
+      <button class="btn" onclick="resetFilters()">
+        <i class="fas fa-undo"></i> Reset Filters
+      </button>
+    </div>
+
+    <!-- All Sites Map -->
+    <div class="card" style="display:none;" id="sitesMapCard">
+      <div class="card-header">
+        <h3>All Recording Sites</h3>
+        <button class="btn btn-export" onclick="exportMap('sitesMap')">
+          <i class="fas fa-download"></i> Export
+        </button>
+      </div>
+      <div id="sitesMap"></div>
+      <div class="export-btns">
+        <button class="btn" onclick="exportMapAsPDF('sitesMap')">
+          <i class="fas fa-file-pdf"></i> PDF
+        </button>
+        <button class="btn" onclick="exportMap('sitesMap')">
+          <i class="fas fa-image"></i> PNG
+        </button>
+      </div>
+    </div>
+
+    <!-- Site Distribution Chart -->
+    <div class="card" style="display:none;" id="siteDistributionCard">
+      <div class="card-header">
+        <h3>Detections by Site</h3>
+        <button class="btn btn-export" onclick="exportChart('siteDistributionChart')">
+          <i class="fas fa-download"></i> Export
+        </button>
+      </div>
+      <canvas id="siteDistributionChart"></canvas>
+      <div class="export-btns">
+        <button class="btn" onclick="exportChartAsPDF('siteDistributionChart')">
+          <i class="fas fa-file-pdf"></i> PDF
+        </button>
+        <button class="btn" onclick="exportChart('siteDistributionChart')">
+          <i class="fas fa-image"></i> PNG
+        </button>
+      </div>
+    </div>
+
+    <!-- Species Network Graph -->
+    <div class="card" style="display:none;" id="networkCard">
+      <div class="card-header">
+        <h3>Species Taxonomy Network</h3>
+        <button class="btn btn-export" onclick="exportNetworkGraph()">
+          <i class="fas fa-download"></i> Export
+        </button>
+      </div>
+      <div class="network-container" id="networkContainer">
+        <canvas id="networkChart"></canvas>
+        <div class="network-tooltip" id="networkTooltip"></div>
+      </div>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: var(--bird-color);"></div>
+          <span>Birds</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: var(--mammal-color);"></div>
+          <span>Mammals</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: var(--amphibian-color);"></div>
+          <span>Amphibians</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: var(--other-color);"></div>
+          <span>Other</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Species Chart -->
     <div class="card" style="display:none;" id="speciesCard">
-      <h3>Detected Species</h3>
+      <div class="card-header">
+        <h3>Species Detections</h3>
+        <button class="btn btn-export" onclick="exportChart('speciesChart')">
+          <i class="fas fa-download"></i> Export
+        </button>
+      </div>
       <canvas id="speciesChart"></canvas>
       <div class="export-btns">
-        <button onclick="exportChart('speciesChart')">Download Chart</button>
+        <button class="btn" onclick="exportChartAsPDF('speciesChart')">
+          <i class="fas fa-file-pdf"></i> PDF
+        </button>
+        <button class="btn" onclick="exportChart('speciesChart')">
+          <i class="fas fa-image"></i> PNG
+        </button>
       </div>
     </div>
 
+    <!-- Trend Chart -->
     <div class="card" style="display:none;" id="trendCard">
-      <h3>Detection Trend Over Time</h3>
+      <div class="card-header">
+        <h3>Detection Trend Over Time</h3>
+        <button class="btn btn-export" onclick="exportChart('trendChart')">
+          <i class="fas fa-download"></i> Export
+        </button>
+      </div>
       <canvas id="trendChart"></canvas>
       <div class="export-btns">
-        <button onclick="exportChart('trendChart')">Download Chart</button>
+        <button class="btn" onclick="exportChartAsPDF('trendChart')">
+          <i class="fas fa-file-pdf"></i> PDF
+        </button>
+        <button class="btn" onclick="exportChart('trendChart')">
+          <i class="fas fa-image"></i> PNG
+        </button>
       </div>
     </div>
 
+    <!-- Song Type Chart -->
+    <div class="card" style="display:none;" id="songTypeCard">
+      <div class="card-header">
+        <h3>Song Type Distribution</h3>
+        <button class="btn btn-export" onclick="exportChart('songTypeChart')">
+          <i class="fas fa-download"></i> Export
+        </button>
+      </div>
+      <canvas id="songTypeChart"></canvas>
+      <div class="export-btns">
+        <button class="btn" onclick="exportChartAsPDF('songTypeChart')">
+          <i class="fas fa-file-pdf"></i> PDF
+        </button>
+        <button class="btn" onclick="exportChart('songTypeChart')">
+          <i class="fas fa-image"></i> PNG
+        </button>
+      </div>
+    </div>
+
+    <!-- Taxon Distribution Chart -->
+    <div class="card" style="display:none;" id="taxonCard">
+      <div class="card-header">
+        <h3>Taxon Distribution</h3>
+        <button class="btn btn-export" onclick="exportChart('taxonChart')">
+          <i class="fas fa-download"></i> Export
+        </button>
+      </div>
+      <canvas id="taxonChart"></canvas>
+      <div class="export-btns">
+        <button class="btn" onclick="exportChartAsPDF('taxonChart')">
+          <i class="fas fa-file-pdf"></i> PDF
+        </button>
+        <button class="btn" onclick="exportChart('taxonChart')">
+          <i class="fas fa-image"></i> PNG
+        </button>
+      </div>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: var(--bird-color);"></div>
+          <span>Birds</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: var(--mammal-color);"></div>
+          <span>Mammals</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: var(--amphibian-color);"></div>
+          <span>Amphibians</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: var(--other-color);"></div>
+          <span>Other</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detection Locations Map -->
     <div class="card" style="display:none;" id="mapCard">
-      <h3>Detection by Location</h3>
+      <div class="card-header">
+        <h3>Detection Locations</h3>
+        <button class="btn btn-export" onclick="exportMap('map')">
+          <i class="fas fa-download"></i> Export
+        </button>
+      </div>
       <div id="map"></div>
       <div class="export-btns">
-        <button onclick="exportMap()">Download Map</button>
+        <button class="btn" onclick="exportMapAsPDF('map')">
+          <i class="fas fa-file-pdf"></i> PDF
+        </button>
+        <button class="btn" onclick="exportMap('map')">
+          <i class="fas fa-image"></i> PNG
+        </button>
       </div>
     </div>
   </div>
 
   <script>
-    // Initialize map with a better default view for your data
+    // Initialize maps
     const map = L.map('map').setView([1.1, 37.4], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    
+    const sitesMap = L.map('sitesMap').setView([1.1, 37.4], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(sitesMap);
+    
+    // Global variables
+    let allData = [];
+    let filteredData = [];
+    let sitesData = [];
+    let speciesData = [];
+    let speciesChart, trendChart, songTypeChart, siteDistributionChart, taxonChart, networkChart;
+    
+    // Color palette for charts
+    const chartColors = [
+      '#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
+      '#1abc9c', '#d35400', '#34495e', '#16a085', '#c0392b'
+    ];
+    
+    // Taxon colors
+    const taxonColors = {
+      'Birds': '#1abc9c',
+      'Mammals': '#e67e22',
+      'Amphibians': '#9b59b6',
+      'Other': '#95a5a6'
+    };
 
     // Export functions
     function exportChart(canvasId) {
-      html2canvas(document.getElementById(canvasId)).then(canvas => {
+      const canvas = document.getElementById(canvasId);
+      const link = document.createElement('a');
+      link.download = `${canvasId}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    }
+    
+    function exportChartAsPDF(canvasId) {
+      const canvas = document.getElementById(canvasId);
+      html2canvas(canvas).then(canvas => {
         const imgData = canvas.toDataURL("image/png");
         const pdf = new jspdf.jsPDF();
-        pdf.addImage(imgData, 'PNG', 10, 10, 180, 90);
-        pdf.save(canvasId + '.pdf');
-
-        const link = document.createElement('a');
-        link.download = canvasId + '.png';
-        link.href = imgData;
-        link.click();
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`${canvasId}.pdf`);
       });
     }
 
-    function exportMap() {
-      html2canvas(document.getElementById("map")).then(canvas => {
-        const imgData = canvas.toDataURL("image/png");
+    function exportMap(mapId) {
+      const mapElement = document.getElementById(mapId);
+      html2canvas(mapElement).then(canvas => {
         const link = document.createElement('a');
-        link.download = "map.png";
-        link.href = imgData;
+        link.download = `${mapId}.png`;
+        link.href = canvas.toDataURL("image/png");
         link.click();
       });
+    }
+    
+    function exportMapAsPDF(mapId) {
+      const mapElement = document.getElementById(mapId);
+      html2canvas(mapElement).then(canvas => {
+        const imgData = canvas.toDataURL("image/png");
+        const pdf = new jspdf.jsPDF({
+          orientation: 'landscape'
+        });
+        const imgProps = pdf.getImageProperties(imgData);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        pdf.save(`${mapId}.pdf`);
+      });
+    }
+    
+    function exportNetworkGraph() {
+      const canvas = document.getElementById('networkChart');
+      const link = document.createElement('a');
+      link.download = 'species-network.png';
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    }
+    
+    function exportDashboard() {
+      // Create a new PDF
+      const pdf = new jspdf.jsPDF('p', 'pt', 'a4');
+      
+      // Add title
+      pdf.setFontSize(18);
+      pdf.text('Bioacoustic Monitoring Dashboard Report', 40, 40);
+      pdf.setFontSize(12);
+      pdf.text(new Date().toLocaleString(), 40, 60);
+      
+      let yPosition = 100;
+      
+      // Add each chart to the PDF
+      const charts = [
+        { id: 'speciesChart', title: 'Species Detections' },
+        { id: 'trendChart', title: 'Detection Trend Over Time' },
+        { id: 'songTypeChart', title: 'Song Type Distribution' },
+        { id: 'siteDistributionChart', title: 'Detections by Site' },
+        { id: 'taxonChart', title: 'Taxon Distribution' }
+      ];
+      
+      // Function to add a chart to the PDF
+      const addChartToPDF = (chartId, title) => {
+        return new Promise(resolve => {
+          const canvas = document.getElementById(chartId);
+          html2canvas(canvas).then(canvasImage => {
+            const imgData = canvasImage.toDataURL('image/png');
+            const imgWidth = pdf.internal.pageSize.getWidth() - 80;
+            const imgHeight = (canvasImage.height * imgWidth) / canvasImage.width;
+            
+            // Add title
+            pdf.setFontSize(14);
+            pdf.text(title, 40, yPosition);
+            yPosition += 20;
+            
+            // Add image
+            pdf.addImage(imgData, 'PNG', 40, yPosition, imgWidth, imgHeight);
+            yPosition += imgHeight + 40;
+            
+            // Add page break if needed
+            if (yPosition > pdf.internal.pageSize.getHeight() - 100) {
+              pdf.addPage();
+              yPosition = 40;
+            }
+            
+            resolve();
+          });
+        });
+      };
+      
+      // Process charts sequentially
+      (async function() {
+        for (const chart of charts) {
+          await addChartToPDF(chart.id, chart.title);
+        }
+        
+        // Add maps
+        const maps = [
+          { id: 'map', title: 'Detection Locations' },
+          { id: 'sitesMap', title: 'All Recording Sites' }
+        ];
+        
+        for (const mapItem of maps) {
+          const mapElement = document.getElementById(mapItem.id);
+          await html2canvas(mapElement).then(canvasImage => {
+            const imgData = canvasImage.toDataURL('image/png');
+            const imgWidth = pdf.internal.pageSize.getWidth() - 80;
+            const imgHeight = (canvasImage.height * imgWidth) / canvasImage.width;
+            
+            // Add title
+            pdf.setFontSize(14);
+            pdf.text(mapItem.title, 40, yPosition);
+            yPosition += 20;
+            
+            // Add image
+            pdf.addImage(imgData, 'PNG', 40, yPosition, imgWidth, imgHeight);
+            yPosition += imgHeight + 40;
+            
+            // Add page break if needed
+            if (yPosition > pdf.internal.pageSize.getHeight() - 100) {
+              pdf.addPage();
+              yPosition = 40;
+            }
+          });
+        }
+        
+        // Save the PDF
+        pdf.save('bioacoustic-dashboard-report.pdf');
+      })();
     }
 
     // CSV loading function
@@ -130,16 +737,422 @@
         });
       });
     }
+    
+    // Initialize filter dropdowns
+    function initFilters(data) {
+      // Species filter
+      const species = [...new Set(data.map(row => row.scientific_name))].sort();
+      const speciesSelect = document.getElementById('speciesFilter');
+      species.forEach(sp => {
+        const option = document.createElement('option');
+        option.value = sp;
+        option.textContent = sp;
+        speciesSelect.appendChild(option);
+      });
+      
+      // Site filter
+      const sites = [...new Set(data.map(row => row.site_name))].sort();
+      const siteSelect = document.getElementById('siteFilter');
+      sites.forEach(site => {
+        const option = document.createElement('option');
+        option.value = site;
+        option.textContent = site;
+        siteSelect.appendChild(option);
+      });
+      
+      // Song type filter
+      const songTypes = [...new Set(data.map(row => row.songtype))].sort();
+      const songTypeSelect = document.getElementById('songTypeFilter');
+      songTypes.forEach(type => {
+        const option = document.createElement('option');
+        option.value = type;
+        option.textContent = type;
+        songTypeSelect.appendChild(option);
+      });
+      
+      // Taxon filter
+      const taxons = [...new Set(speciesData.map(sp => sp.taxon))].sort();
+      const taxonSelect = document.getElementById('taxonFilter');
+      taxons.forEach(taxon => {
+        const option = document.createElement('option');
+        option.value = taxon;
+        option.textContent = taxon;
+        taxonSelect.appendChild(option);
+      });
+      
+      // Date range
+      const dates = data.map(row => row.recording_local_time ? row.recording_local_time.split(' ')[0] : null)
+                       .filter(date => date)
+                       .sort();
+      if (dates.length > 0) {
+        document.getElementById('dateFrom').min = dates[0];
+        document.getElementById('dateFrom').max = dates[dates.length - 1];
+        document.getElementById('dateTo').min = dates[0];
+        document.getElementById('dateTo').max = dates[dates.length - 1];
+        document.getElementById('dateFrom').value = dates[0];
+        document.getElementById('dateTo').value = dates[dates.length - 1];
+      }
+    }
+    
+    // Apply filters
+    function applyFilters() {
+      const searchText = document.getElementById('searchInput').value.toLowerCase();
+      const selectedSpecies = Array.from(document.getElementById('speciesFilter').selectedOptions).map(opt => opt.value);
+      const selectedSites = Array.from(document.getElementById('siteFilter').selectedOptions).map(opt => opt.value);
+      const selectedSongTypes = Array.from(document.getElementById('songTypeFilter').selectedOptions).map(opt => opt.value);
+      const selectedTaxons = Array.from(document.getElementById('taxonFilter').selectedOptions).map(opt => opt.value);
+      const dateFrom = document.getElementById('dateFrom').value;
+      const dateTo = document.getElementById('dateTo').value;
+      
+      // Get species IDs for selected taxons
+      const taxonSpeciesIds = selectedTaxons.length > 0 ? 
+        speciesData.filter(sp => selectedTaxons.includes(sp.taxon)).map(sp => sp.species_id) : [];
+      
+      filteredData = allData.filter(row => {
+        // Search text filter
+        const matchesSearch = !searchText || 
+          (row.scientific_name && row.scientific_name.toLowerCase().includes(searchText)) ||
+          (row.site_name && row.site_name.toLowerCase().includes(searchText)) ||
+          (row.recording_local_time && row.recording_local_time.toLowerCase().includes(searchText));
+        
+        // Species filter
+        const matchesSpecies = selectedSpecies.length === 0 || 
+          (row.scientific_name && selectedSpecies.includes(row.scientific_name));
+        
+        // Site filter
+        const matchesSite = selectedSites.length === 0 || 
+          (row.site_name && selectedSites.includes(row.site_name));
+        
+        // Song type filter
+        const matchesSongType = selectedSongTypes.length === 0 || 
+          (row.songtype && selectedSongTypes.includes(row.songtype));
+        
+        // Taxon filter
+        const matchesTaxon = selectedTaxons.length === 0 || 
+          (row.species_id && taxonSpeciesIds.includes(row.species_id));
+        
+        // Date filter
+        let matchesDate = true;
+        if (dateFrom || dateTo) {
+          const rowDate = row.recording_local_time ? row.recording_local_time.split(' ')[0] : null;
+          if (rowDate) {
+            if (dateFrom && rowDate < dateFrom) matchesDate = false;
+            if (dateTo && rowDate > dateTo) matchesDate = false;
+          } else {
+            matchesDate = false;
+          }
+        }
+        
+        return matchesSearch && matchesSpecies && matchesSite && matchesSongType && matchesTaxon && matchesDate;
+      });
+      
+      renderDashboard(filteredData);
+    }
+    
+    // Reset filters
+    function resetFilters() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('speciesFilter').selectedIndex = -1;
+      document.getElementById('siteFilter').selectedIndex = -1;
+      document.getElementById('songTypeFilter').selectedIndex = -1;
+      document.getElementById('taxonFilter').selectedIndex = -1;
+      const dates = allData.map(row => row.recording_local_time ? row.recording_local_time.split(' ')[0] : null)
+                         .filter(date => date)
+                         .sort();
+      if (dates.length > 0) {
+        document.getElementById('dateFrom').value = dates[0];
+        document.getElementById('dateTo').value = dates[dates.length - 1];
+      }
+      filteredData = [...allData];
+      renderDashboard(filteredData);
+    }
+
+    // Render sites map and chart
+    function renderSitesData() {
+      // Clear previous markers
+      sitesMap.eachLayer(layer => {
+        if (layer instanceof L.Marker) {
+          sitesMap.removeLayer(layer);
+        }
+      });
+      
+      // Add markers to sites map
+      sitesData.forEach(site => {
+        const lat = parseFloat(site.Latitude);
+        const lng = parseFloat(site.Longitude);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          const recordingsCount = parseInt(site.Recordings_Count) || 0;
+          const radius = Math.min(Math.max(5, Math.sqrt(recordingsCount) * 0.5), 20);
+          
+          L.circleMarker([lat, lng], {
+            radius: radius,
+            color: '#3498db',
+            fillOpacity: 0.7,
+            fillColor: '#2980b9'
+          }).addTo(sitesMap).bindPopup(`
+            <b>${site.Name}</b><br>
+            Recordings: ${recordingsCount.toLocaleString()}<br>
+            ${site.Altitude ? `Altitude: ${site.Altitude}m<br>` : ''}
+            Last Updated: ${site.Updated || 'N/A'}
+          `);
+        }
+      });
+      
+      // Fit map bounds to markers
+      const markers = [];
+      sitesMap.eachLayer(layer => {
+        if (layer instanceof L.CircleMarker) {
+          markers.push(layer.getLatLng());
+        }
+      });
+      
+      if (markers.length > 0) {
+        const group = new L.featureGroup(markers.map(marker => L.marker(marker)));
+        sitesMap.fitBounds(group.getBounds().pad(0.1));
+      }
+      
+      // Create site distribution chart
+      const siteDistributionData = sitesData
+        .filter(site => site.Name && site.Recordings_Count)
+        .sort((a, b) => (parseInt(b.Recordings_Count) || 0) - (parseInt(a.Recordings_Count) || 0))
+        .slice(0, 20); // Limit to top 20 sites for readability
+      
+      const siteCtx = document.getElementById('siteDistributionChart').getContext('2d');
+      if (siteDistributionChart) {
+        siteDistributionChart.data.labels = siteDistributionData.map(site => site.Name);
+        siteDistributionChart.data.datasets[0].data = siteDistributionData.map(site => parseInt(site.Recordings_Count) || 0);
+        siteDistributionChart.update();
+      } else {
+        siteDistributionChart = new Chart(siteCtx, {
+          type: 'bar',
+          data: {
+            labels: siteDistributionData.map(site => site.Name),
+            datasets: [{
+              label: 'Recordings Count',
+              data: siteDistributionData.map(site => parseInt(site.Recordings_Count) || 0),
+              backgroundColor: '#3498db',
+              borderColor: '#2980b9',
+              borderWidth: 1
+            }]
+          },
+          options: { 
+            responsive: true, 
+            plugins: { 
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return `${context.parsed.y.toLocaleString()} recordings`;
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Number of Recordings'
+                }
+              },
+              x: {
+                ticks: {
+                  autoSkip: false,
+                  maxRotation: 45,
+                  minRotation: 45
+                }
+              }
+            }
+          }
+        });
+      }
+    }
+    
+    // Render species taxonomy network
+    function renderSpeciesNetwork() {
+      // Group species by taxon
+      const taxonGroups = {};
+      speciesData.forEach(species => {
+        if (!taxonGroups[species.taxon]) {
+          taxonGroups[species.taxon] = [];
+        }
+        taxonGroups[species.taxon].push(species);
+      });
+      
+      // Prepare data for network chart
+      const taxonNodes = Object.keys(taxonGroups).map(taxon => ({
+        id: taxon,
+        label: taxon,
+        group: taxon,
+        value: taxonGroups[taxon].length,
+        color: taxonColors[taxon] || '#95a5a6'
+      }));
+      
+      const speciesNodes = speciesData.map(species => ({
+        id: species.scientific_name,
+        label: species.scientific_name,
+        group: species.taxon,
+        value: 1,
+        color: taxonColors[species.taxon] || '#95a5a6'
+      }));
+      
+      const edges = speciesData.map(species => ({
+        from: species.taxon,
+        to: species.scientific_name
+      }));
+      
+      const allNodes = [...taxonNodes, ...speciesNodes];
+      
+      // Create network chart
+      const networkCtx = document.getElementById('networkChart').getContext('2d');
+      
+      if (networkChart) {
+        networkChart.destroy();
+      }
+      
+      networkChart = new Chart(networkCtx, {
+        type: 'bubble',
+        data: {
+          datasets: allNodes.map(node => ({
+            label: node.label,
+            data: [{
+              x: Math.random() * 100, // Random x position (will be adjusted by Chart.js)
+              y: Math.random() * 100, // Random y position
+              r: node.value * 5 + 10 // Bubble size based on value
+            }],
+            backgroundColor: node.color,
+            borderColor: '#fff',
+            borderWidth: 1
+          })),
+          // Add edges as annotations
+          // Note: Chart.js doesn't natively support network graphs with edges,
+          // so we're using a bubble chart as a simplified visualization
+          // For a true network graph, consider using a specialized library like vis.js
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const label = context.dataset.label || '';
+                  const species = speciesData.find(sp => sp.scientific_name === label);
+                  if (species) {
+                    return [
+                      `Species: ${label}`,
+                      `Family: ${species.family || 'Unknown'}`,
+                      `Taxon: ${species.taxon || 'Unknown'}`,
+                      `Song Type: ${species.songtype || 'Unknown'}`
+                    ];
+                  }
+                  return label;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              display: false
+            },
+            y: {
+              display: false
+            }
+          }
+        }
+      });
+      
+      // Add interactivity to the network container
+      const networkContainer = document.getElementById('networkContainer');
+      const tooltip = document.getElementById('networkTooltip');
+      
+      networkContainer.addEventListener('mousemove', (e) => {
+        const rect = networkContainer.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        tooltip.style.left = `${x + 10}px`;
+        tooltip.style.top = `${y + 10}px`;
+      });
+    }
+    
+    // Render taxon distribution chart
+    function renderTaxonChart() {
+      // Count species by taxon
+      const taxonCount = {};
+      speciesData.forEach(species => {
+        const taxon = species.taxon || 'Unknown';
+        taxonCount[taxon] = (taxonCount[taxon] || 0) + 1;
+      });
+      
+      // Create taxon chart
+      const taxonCtx = document.getElementById('taxonChart').getContext('2d');
+      if (taxonChart) {
+        taxonChart.data.labels = Object.keys(taxonCount);
+        taxonChart.data.datasets[0].data = Object.values(taxonCount);
+        taxonChart.data.datasets[0].backgroundColor = Object.keys(taxonCount).map(taxon => 
+          taxonColors[taxon] || '#95a5a6'
+        );
+        taxonChart.update();
+      } else {
+        taxonChart = new Chart(taxonCtx, {
+          type: 'doughnut',
+          data: {
+            labels: Object.keys(taxonCount),
+            datasets: [{
+              data: Object.values(taxonCount),
+              backgroundColor: Object.keys(taxonCount).map(taxon => 
+                taxonColors[taxon] || '#95a5a6'
+              ),
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'right'
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const label = context.label || '';
+                    const value = context.raw || 0;
+                    const total = context.dataset.data.reduce((acc, data) => acc + data, 0);
+                    const percentage = Math.round((value / total) * 100);
+                    return `${label}: ${value} species (${percentage}%)`;
+                  }
+                }
+              },
+              datalabels: {
+                display: false
+              }
+            }
+          }
+        });
+      }
+    }
 
     // Dashboard rendering function
     function renderDashboard(data) {
       // Show loading message while processing
       document.getElementById('loading').textContent = "Processing data...";
+      
+      // Clear previous map markers
+      map.eachLayer(layer => {
+        if (layer instanceof L.Marker || layer instanceof L.CircleMarker) {
+          map.removeLayer(layer);
+        }
+      });
 
-      // Process species data
+      // Process data
       const speciesCount = {};
       const dateCount = {};
       const songTypeCount = {};
+      const uniqueSites = new Set();
       
       data.forEach(row => {
         // Process species data
@@ -153,127 +1166,274 @@
         // Process date data
         const date = row.recording_local_time ? row.recording_local_time.split(' ')[0] : "No date";
         dateCount[date] = (dateCount[date] || 0) + 1;
+        
+        // Track unique sites
+        const site = row.site_name || "Unknown";
+        if (site !== "Unknown") uniqueSites.add(site);
 
         // Add map markers
         const lat = parseFloat(row.site_latitude);
         const lng = parseFloat(row.site_longitude);
         if (!isNaN(lat) && !isNaN(lng)) {
-          L.circleMarker([lat, lng], {
+          const marker = L.circleMarker([lat, lng], {
             radius: 5,
             color: '#e74c3c',
             fillOpacity: 0.8,
             fillColor: '#3498db'
-          }).addTo(map).bindPopup(`
-            <b>Species:</b> ${species}<br>
-            <b>Date:</b> ${date}<br>
-            <b>Song Type:</b> ${songType}<br>
-            <b>Site:</b> ${row.site_name || 'Unknown'}
-          `);
+          }).addTo(map);
+          
+          // Custom popup content
+          const popupContent = `
+            <div style="max-width: 250px;">
+              <h4 style="margin: 0 0 10px 0; color: var(--primary-color);">${species}</h4>
+              <p style="margin: 5px 0;"><strong>Date:</strong> ${date}</p>
+              <p style="margin: 5px 0;"><strong>Song Type:</strong> ${songType}</p>
+              <p style="margin: 5px 0;"><strong>Site:</strong> ${site}</p>
+              ${row.project_name ? `<p style="margin: 5px 0;"><strong>Project:</strong> ${row.project_name}</p>` : ''}
+              ${row.template_name ? `<p style="margin: 5px 0;"><strong>Template:</strong> ${row.template_name}</p>` : ''}
+            </div>
+          `;
+          
+          marker.bindPopup(popupContent);
         }
       });
 
+      // Update summary statistics
+      document.getElementById('totalDetections').textContent = data.length.toLocaleString();
+      document.getElementById('uniqueSpecies').textContent = Object.keys(speciesCount).length.toLocaleString();
+      document.getElementById('recordingSites').textContent = uniqueSites.size.toLocaleString();
+      
+      // Calculate time period
+      const dates = Object.keys(dateCount).filter(d => d !== "No date").sort();
+      if (dates.length > 0) {
+        const startDate = new Date(dates[0]);
+        const endDate = new Date(dates[dates.length - 1]);
+        document.getElementById('timePeriod').textContent = 
+          `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+      }
+
       // Sort dates chronologically
-      const sortedDates = Object.keys(dateCount).sort((a, b) => new Date(a) - new Date(b));
+      const sortedDates = Object.keys(dateCount).filter(d => d !== "No date").sort((a, b) => new Date(a) - new Date(b));
       const sortedDateCount = {};
       sortedDates.forEach(date => {
         sortedDateCount[date] = dateCount[date];
       });
 
-      // Create species chart
-      new Chart(document.getElementById('speciesChart'), {
-        type: 'bar',
-        data: {
-          labels: Object.keys(speciesCount),
-          datasets: [{
-            label: 'Detections',
-            data: Object.values(speciesCount),
-            backgroundColor: '#3498db',
-            borderColor: '#2980b9',
-            borderWidth: 1
-          }]
-        },
-        options: { 
-          responsive: true, 
-          plugins: { 
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  return `${context.parsed.y} detections`;
+      // Create or update species chart
+      const speciesCtx = document.getElementById('speciesChart').getContext('2d');
+      if (speciesChart) {
+        speciesChart.data.labels = Object.keys(speciesCount);
+        speciesChart.data.datasets[0].data = Object.values(speciesCount);
+        speciesChart.update();
+      } else {
+        speciesChart = new Chart(speciesCtx, {
+          type: 'bar',
+          data: {
+            labels: Object.keys(speciesCount),
+            datasets: [{
+              label: 'Detections',
+              data: Object.values(speciesCount),
+              backgroundColor: '#3498db',
+              borderColor: '#2980b9',
+              borderWidth: 1
+            }]
+          },
+          options: { 
+            responsive: true, 
+            plugins: { 
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return `${context.parsed.y} detections`;
+                  },
+                  title: function(context) {
+                    return context[0].label;
+                  }
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Number of Detections'
+                }
+              },
+              x: {
+                ticks: {
+                  autoSkip: false,
+                  maxRotation: 45,
+                  minRotation: 45
                 }
               }
             }
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              title: {
-                display: true,
-                text: 'Number of Detections'
-              }
-            }
           }
-        }
-      });
+        });
+      }
 
-      // Create trend chart
-      new Chart(document.getElementById('trendChart'), {
-        type: 'line',
-        data: {
-          labels: Object.keys(sortedDateCount),
-          datasets: [{
-            label: 'Detections Over Time',
-            data: Object.values(sortedDateCount),
-            borderColor: '#e74c3c',
-            backgroundColor: 'rgba(231, 76, 60, 0.1)',
-            borderWidth: 2,
-            tension: 0.1,
-            fill: true
-          }]
-        },
-        options: { 
-          responsive: true,
-          scales: {
-            y: {
-              beginAtZero: true,
-              title: {
-                display: true,
-                text: 'Number of Detections'
+      // Create or update trend chart
+      const trendCtx = document.getElementById('trendChart').getContext('2d');
+      if (trendChart) {
+        trendChart.data.labels = Object.keys(sortedDateCount);
+        trendChart.data.datasets[0].data = Object.values(sortedDateCount);
+        trendChart.update();
+      } else {
+        trendChart = new Chart(trendCtx, {
+          type: 'line',
+          data: {
+            labels: Object.keys(sortedDateCount),
+            datasets: [{
+              label: 'Detections Over Time',
+              data: Object.values(sortedDateCount),
+              borderColor: chartColors[1],
+              backgroundColor: 'rgba(231, 76, 60, 0.1)',
+              borderWidth: 2,
+              tension: 0.1,
+              fill: true
+            }]
+          },
+          options: { 
+            responsive: true,
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return `${context.parsed.y} detections`;
+                  }
+                }
               }
             },
-            x: {
-              title: {
-                display: true,
-                text: 'Date'
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Number of Detections'
+                }
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: 'Date'
+                }
               }
             }
           }
+        });
+      }
+
+      // Create or update song type chart
+      const songTypeCtx = document.getElementById('songTypeChart').getContext('2d');
+      if (songTypeChart) {
+        songTypeChart.data.labels = Object.keys(songTypeCount);
+        songTypeChart.data.datasets[0].data = Object.values(songTypeCount);
+        songTypeChart.update();
+      } else {
+        songTypeChart = new Chart(songTypeCtx, {
+          type: 'pie',
+          data: {
+            labels: Object.keys(songTypeCount),
+            datasets: [{
+              data: Object.values(songTypeCount),
+              backgroundColor: chartColors.slice(2),
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: {
+                position: 'right'
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    const label = context.label || '';
+                    const value = context.raw || 0;
+                    const total = context.dataset.data.reduce((acc, data) => acc + data, 0);
+                    const percentage = Math.round((value / total) * 100);
+                    return `${label}: ${value} (${percentage}%)`;
+                  }
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // Fit map bounds to markers
+      const markers = [];
+      map.eachLayer(layer => {
+        if (layer instanceof L.CircleMarker) {
+          markers.push(layer.getLatLng());
         }
       });
+      
+      if (markers.length > 0) {
+        const group = new L.featureGroup(markers.map(marker => L.marker(marker)));
+        map.fitBounds(group.getBounds().pad(0.1));
+      }
 
       // Hide loading message and show cards
       document.getElementById('loading').style.display = 'none';
+      document.getElementById('summaryCard').style.display = 'block';
+      document.getElementById('filterCard').style.display = 'block';
       document.getElementById('speciesCard').style.display = 'block';
       document.getElementById('trendCard').style.display = 'block';
+      document.getElementById('songTypeCard').style.display = 'block';
+      document.getElementById('taxonCard').style.display = 'block';
       document.getElementById('mapCard').style.display = 'block';
+      document.getElementById('sitesMapCard').style.display = 'block';
+      document.getElementById('siteDistributionCard').style.display = 'block';
+      document.getElementById('networkCard').style.display = 'block';
     }
 
     // Initialize dashboard
     document.addEventListener('DOMContentLoaded', () => {
-      const csvUrl = 'https://raw.githubusercontent.com/douglasmbura/dashboard/main/_templates.csv';
-      
-      loadCSV(csvUrl)
-        .then(data => {
-          if (data && data.length > 0) {
-            renderDashboard(data);
-          } else {
-            document.getElementById('loading').textContent = "No data available";
-          }
-        })
-        .catch(error => {
-          console.error("Error loading data:", error);
-          document.getElementById('loading').textContent = "Error loading data. Please check console for details.";
+      // Load all CSV files
+      Promise.all([
+        loadCSV('https://raw.githubusercontent.com/douglasmbura/dashboard/main/_templates.csv'),
+        loadCSV('https://raw.githubusercontent.com/douglasmbura/dashboard/main/sites-export.csv'),
+        loadCSV('https://raw.githubusercontent.com/douglasmbura/dashboard/main/species-export.csv')
+      ])
+      .then(([templatesData, sitesData, speciesData]) => {
+        // Process templates data
+        allData = templatesData.map(row => {
+          // Add species_id to each detection for taxon filtering
+          const species = speciesData.find(sp => sp.scientific_name === row.scientific_name);
+          return {
+            ...row,
+            species_id: species ? species.species_id : null
+          };
         });
+        
+        filteredData = [...allData];
+        window.sitesData = sitesData;
+        window.speciesData = speciesData;
+        
+        initFilters(allData);
+        renderDashboard(allData);
+        renderSitesData();
+        renderSpeciesNetwork();
+        renderTaxonChart();
+        
+        // Add export all button after data loads
+        const header = document.querySelector('header');
+        const exportBtn = document.createElement('button');
+        exportBtn.className = 'btn btn-export';
+        exportBtn.style.position = 'absolute';
+        exportBtn.style.right = '20px';
+        exportBtn.style.top = '20px';
+        exportBtn.innerHTML = '<i class="fas fa-file-pdf"></i> Export Full Report';
+        exportBtn.onclick = exportDashboard;
+        header.appendChild(exportBtn);
+      })
+      .catch(error => {
+        console.error("Error loading data:", error);
+        document.getElementById('loading').textContent = "Error loading data. Please check console for details.";
+      });
     });
   </script>
 </body>

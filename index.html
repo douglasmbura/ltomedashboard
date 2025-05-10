@@ -40,6 +40,12 @@
     .export-btns {
       margin-top: 10px;
     }
+    .loading {
+      text-align: center;
+      padding: 20px;
+      font-style: italic;
+      color: #666;
+    }
   </style>
 </head>
 <body>
@@ -48,7 +54,9 @@
   </header>
 
   <div class="container">
-    <div class="card">
+    <div id="loading" class="loading">Loading data...</div>
+    
+    <div class="card" style="display:none;" id="speciesCard">
       <h3>Detected Species</h3>
       <canvas id="speciesChart"></canvas>
       <div class="export-btns">
@@ -56,7 +64,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" style="display:none;" id="trendCard">
       <h3>Detection Trend Over Time</h3>
       <canvas id="trendChart"></canvas>
       <div class="export-btns">
@@ -64,7 +72,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" style="display:none;" id="mapCard">
       <h3>Detection by Location</h3>
       <div id="map"></div>
       <div class="export-btns">
@@ -74,9 +82,11 @@
   </div>
 
   <script>
+    // Initialize map
     const map = L.map('map').setView([0.0, 37.0], 6);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
+    // Export functions
     function exportChart(canvasId) {
       html2canvas(document.getElementById(canvasId)).then(canvas => {
         const imgData = canvas.toDataURL("image/png");
@@ -101,42 +111,73 @@
       });
     }
 
-    function loadCSV(file) {
-      return new Promise((resolve) => {
-        Papa.parse(file, {
+    // CSV loading function
+    function loadCSV(url) {
+      return new Promise((resolve, reject) => {
+        Papa.parse(url, {
           download: true,
           header: true,
-          complete: function(results) {
-            resolve(results.data);
+          complete: (results) => {
+            if (results.data && results.data.length > 0) {
+              resolve(results.data.filter(row => Object.values(row).some(val => val !== '')));
+            } else {
+              reject(new Error("No data found in CSV"));
+            }
+          },
+          error: (error) => {
+            reject(error);
           }
         });
       });
     }
 
+    // Dashboard rendering function
     function renderDashboard(data) {
-      // Species frequency
+      // Show loading message while processing
+      document.getElementById('loading').textContent = "Processing data...";
+
+      // Process species data
       const speciesCount = {};
       const dateCount = {};
+      
       data.forEach(row => {
-        const species = row.Species || "Unknown";
-        const date = new Date(row.Start_Time).toISOString().split('T')[0];
+        // Process species data
+        const species = row.Species || row.species || "Unknown";
         speciesCount[species] = (speciesCount[species] || 0) + 1;
+
+        // Process date data (handle different possible date columns)
+        let date;
+        if (row.Start_Time) {
+          date = new Date(row.Start_Time).toISOString().split('T')[0];
+        } else if (row.Date) {
+          date = row.Date.split(' ')[0]; // Get just the date part if there's time
+        } else if (row.Timestamp) {
+          date = new Date(row.Timestamp).toISOString().split('T')[0];
+        } else {
+          date = "No date";
+        }
         dateCount[date] = (dateCount[date] || 0) + 1;
 
-        // Map Markers
-        if (row.Latitude && row.Longitude) {
-          const lat = parseFloat(row.Latitude);
-          const lng = parseFloat(row.Longitude);
-          if (!isNaN(lat) && !isNaN(lng)) {
-            L.circleMarker([lat, lng], {
-              radius: 5,
-              color: 'blue',
-              fillOpacity: 0.6
-            }).addTo(map).bindPopup(`Species: ${species}`);
-          }
+        // Add map markers (handle different possible coordinate columns)
+        const lat = parseFloat(row.Latitude || row.latitude || row.lat);
+        const lng = parseFloat(row.Longitude || row.longitude || row.lng || row.lon);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          L.circleMarker([lat, lng], {
+            radius: 5,
+            color: 'blue',
+            fillOpacity: 0.6
+          }).addTo(map).bindPopup(`Species: ${species}<br>Date: ${date}`);
         }
       });
 
+      // Sort dates chronologically
+      const sortedDates = Object.keys(dateCount).sort((a, b) => new Date(a) - new Date(b));
+      const sortedDateCount = {};
+      sortedDates.forEach(date => {
+        sortedDateCount[date] = dateCount[date];
+      });
+
+      // Create species chart
       new Chart(document.getElementById('speciesChart'), {
         type: 'bar',
         data: {
@@ -147,33 +188,80 @@
             backgroundColor: '#3498db'
           }]
         },
-        options: { responsive: true, plugins: { legend: { display: false } } }
+        options: { 
+          responsive: true, 
+          plugins: { 
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return `${context.parsed.y} detections`;
+                }
+              }
+            }
+          } 
+        }
       });
 
+      // Create trend chart
       new Chart(document.getElementById('trendChart'), {
         type: 'line',
         data: {
-          labels: Object.keys(dateCount),
+          labels: Object.keys(sortedDateCount),
           datasets: [{
             label: 'Detections Over Time',
-            data: Object.values(dateCount),
+            data: Object.values(sortedDateCount),
             borderColor: '#e74c3c',
-            fill: false
+            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+            borderWidth: 2,
+            tension: 0.1,
+            fill: true
           }]
         },
-        options: { responsive: true }
+        options: { 
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Number of Detections'
+              }
+            },
+            x: {
+              title: {
+                display: true,
+                text: 'Date'
+              }
+            }
+          }
+        }
       });
+
+      // Hide loading message and show cards
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('speciesCard').style.display = 'block';
+      document.getElementById('trendCard').style.display = 'block';
+      document.getElementById('mapCard').style.display = 'block';
     }
 
-    // Load CSVs using Promise.all
-    Promise.all([
-      loadCSV('https://raw.githubusercontent.com/douglasmbura/dashboard/main/_templates.csv')
-    ]).then(([csvData]) => {
-      renderDashboard(csvData);
-    }).catch(error => {
-      console.error('Error loading data:', error);
+    // Initialize dashboard
+    document.addEventListener('DOMContentLoaded', () => {
+      const csvUrl = 'https://raw.githubusercontent.com/douglasmbura/dashboard/main/_templates.csv';
+      
+      loadCSV(csvUrl)
+        .then(data => {
+          if (data && data.length > 0) {
+            renderDashboard(data);
+          } else {
+            document.getElementById('loading').textContent = "No data available";
+          }
+        })
+        .catch(error => {
+          console.error("Error loading data:", error);
+          document.getElementById('loading').textContent = "Error loading data. Please check console for details.";
+        });
     });
-
   </script>
 </body>
 </html>

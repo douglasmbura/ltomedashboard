@@ -101,13 +101,15 @@
       });
     }
 
-    function loadCSV(file, callback) {
-      Papa.parse(file, {
-        download: true,
-        header: true,
-        complete: function(results) {
-          callback(results.data);
-        }
+    function loadCSV(file) {
+      return new Promise((resolve) => {
+        Papa.parse(file, {
+          download: true,
+          header: true,
+          complete: function(results) {
+            resolve(results.data);
+          }
+        });
       });
     }
 
@@ -163,7 +165,14 @@
       });
     }
 
-    loadCSV('https://raw.githubusercontent.com/douglasmbura/dashboard/main/_templates.csv', renderDashboard);
+    // Load CSVs using Promise.all
+    Promise.all([
+      loadCSV('https://raw.githubusercontent.com/douglasmbura/dashboard/main/_templates.csv')
+    ]).then(([csvData]) => {
+      renderDashboard(csvData);
+    }).catch(error => {
+      console.error('Error loading data:', error);
+    });
 
   </script>
 </body>

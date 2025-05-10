@@ -82,8 +82,8 @@
   </div>
 
   <script>
-    // Initialize map
-    const map = L.map('map').setView([0.0, 37.0], 6);
+    // Initialize map with a better default view for your data
+    const map = L.map('map').setView([1.1, 37.4], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     // Export functions
@@ -139,34 +139,36 @@
       // Process species data
       const speciesCount = {};
       const dateCount = {};
+      const songTypeCount = {};
       
       data.forEach(row => {
         // Process species data
-        const species = row.Species || row.species || "Unknown";
+        const species = row.scientific_name || "Unknown";
         speciesCount[species] = (speciesCount[species] || 0) + 1;
 
-        // Process date data (handle different possible date columns)
-        let date;
-        if (row.Start_Time) {
-          date = new Date(row.Start_Time).toISOString().split('T')[0];
-        } else if (row.Date) {
-          date = row.Date.split(' ')[0]; // Get just the date part if there's time
-        } else if (row.Timestamp) {
-          date = new Date(row.Timestamp).toISOString().split('T')[0];
-        } else {
-          date = "No date";
-        }
+        // Process song type data
+        const songType = row.songtype || "Unknown";
+        songTypeCount[songType] = (songTypeCount[songType] || 0) + 1;
+
+        // Process date data
+        const date = row.recording_local_time ? row.recording_local_time.split(' ')[0] : "No date";
         dateCount[date] = (dateCount[date] || 0) + 1;
 
-        // Add map markers (handle different possible coordinate columns)
-        const lat = parseFloat(row.Latitude || row.latitude || row.lat);
-        const lng = parseFloat(row.Longitude || row.longitude || row.lng || row.lon);
+        // Add map markers
+        const lat = parseFloat(row.site_latitude);
+        const lng = parseFloat(row.site_longitude);
         if (!isNaN(lat) && !isNaN(lng)) {
           L.circleMarker([lat, lng], {
             radius: 5,
-            color: 'blue',
-            fillOpacity: 0.6
-          }).addTo(map).bindPopup(`Species: ${species}<br>Date: ${date}`);
+            color: '#e74c3c',
+            fillOpacity: 0.8,
+            fillColor: '#3498db'
+          }).addTo(map).bindPopup(`
+            <b>Species:</b> ${species}<br>
+            <b>Date:</b> ${date}<br>
+            <b>Song Type:</b> ${songType}<br>
+            <b>Site:</b> ${row.site_name || 'Unknown'}
+          `);
         }
       });
 
@@ -185,7 +187,9 @@
           datasets: [{
             label: 'Detections',
             data: Object.values(speciesCount),
-            backgroundColor: '#3498db'
+            backgroundColor: '#3498db',
+            borderColor: '#2980b9',
+            borderWidth: 1
           }]
         },
         options: { 
@@ -199,7 +203,16 @@
                 }
               }
             }
-          } 
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Number of Detections'
+              }
+            }
+          }
         }
       });
 

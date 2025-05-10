@@ -91,7 +91,7 @@
   <script>
     const siteMap = L.map("map").setView([1.1145, 37.4690], 10);
     const detectionMap = L.map("detectionMap").setView([1.1145, 37.4690], 10);
-    const satelliteLayer = L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png");
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}");
     const standardLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png");
     standardLayer.addTo(siteMap);
     satelliteLayer.addTo(detectionMap);
